@@ -20,7 +20,7 @@ let make_prologue consts_tbl fvars_tbl =
   let primitive_names_to_labels =
   [
     (* Type queries  *)
-    (* "boolean?", "boolean?"; "flonum?", "flonum?"; "rational?", "rational?";
+    "boolean?", "boolean?"; "flonum?", "flonum?"; "rational?", "rational?";
     "pair?", "pair?"; "null?", "null?"; "char?", "char?"; "string?", "string?";
     "procedure?", "procedure?"; "symbol?", "symbol?";
     (* String procedures *)
@@ -33,7 +33,7 @@ let make_prologue consts_tbl fvars_tbl =
     (* Arithmetic ops *)
     "+", "add"; "*", "mul"; "/", "div"; "=", "eq"; "<", "lt";
     (* Additional rational numebr ops *)
-    "numerator", "numerator"; "denominator", "denominator"; "gcd", "gcd"; *)
+    "numerator", "numerator"; "denominator", "denominator"; "gcd", "gcd";
     (* you can add yours here *)
   ] in
   let make_primitive_closure (prim, label) =
