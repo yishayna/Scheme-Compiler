@@ -33,24 +33,25 @@ end;;
 
 module Code_Gen : CODE_GEN = struct
 
-  let primitive_fvar_table =  [
-                                (* Type queries  *)
-                                ("boolean?", 0); ("flonum?", 0); ("rational?", 0);
-                                ("pair?", 0); ("null?", 0); ("char?",0); ("string?", 0); 
-                                ("procedure?", 0); ("symbol?", 0); 
-                                (* String procedures *)
-                                ("string-length", 0); ("string-ref", 0); ("string-set!",0); ("make-string", 0); ("symbol->string",0); 
-                                (* Type conversions *)
-                                ("char->integer", 0); ("integer->char", 0); ("exact->inexact", 0);
-                                (* Identity test *)
-                                ("eq?", 0); 
-                                (* Arithmetic ops *)
-                                ("+", 0); ("*", 0); ("/", 0); ("=", 0); ("<", 0); 
-                                (* Additional rational numebr ops *)
-                                ("numerator", 0); ("denominator", 0); ("gcd", 0); 
-                                (* you can add yours here *)
-                                ("apply",0); ("car",0);("cdr",0); ("cons",0); ("set-car!",0); ("set-cdr!",0);
-                              ]                          
+  let primitive_fvar_table =  
+    [
+      (* Type queries  *)
+      ("boolean?", 0); ("flonum?", 0); ("rational?", 0);
+      ("pair?", 0); ("null?", 0); ("char?",0); ("string?", 0); 
+      ("procedure?", 0); ("symbol?", 0); 
+      (* String procedures *)
+      ("string-length", 0); ("string-ref", 0); ("string-set!",0); ("make-string", 0); ("symbol->string",0); 
+      (* Type conversions *)
+      ("char->integer", 0); ("integer->char", 0); ("exact->inexact", 0);
+      (* Identity test *)
+      ("eq?", 0); 
+      (* Arithmetic ops *)
+      ("+", 0); ("*", 0); ("/", 0); ("=", 0); ("<", 0); 
+      (* Additional rational numebr ops *)
+      ("numerator", 0); ("denominator", 0); ("gcd", 0); 
+      (* you can add yours here *)
+      ("apply",0); ("car",0);("cdr",0); ("cons",0); ("set-car!",0); ("set-cdr!",0);
+    ]                          
 
 
   let make_consts_tbl asts = raise X_not_yet_implemented;;
