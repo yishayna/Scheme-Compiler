@@ -102,25 +102,7 @@ main:
 user_code_fragment:
 ;;; The code you compiled will be added here.
 ;;; It will be executed immediately after the closures for 
-;;; the primitive procedures are set up.\n
-
-
-apply:
-car:
-cdr:
-cons:
-set_car:
-set_cdr:
-fold_left:
-fold_right:
-cons_klenee:
-
-
-
-
-
-
-";;
+;;; the primitive procedures are set up.\n";;
 
 let clean_exit =
   ";;; Clean up the dummy frame, set the exit status to 0 (\"success\"), 
