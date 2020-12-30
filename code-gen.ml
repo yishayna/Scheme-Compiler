@@ -49,7 +49,7 @@ module Code_Gen : CODE_GEN = struct
                                 (* Additional rational numebr ops *)
                                 ("numerator", 0); ("denominator", 0); ("gcd", 0); 
                                 (* you can add yours here *)
-                                ("apply",0); ("car",0);("cdr",0); ("cons",0); ("set-car!",0); ("set-cdr!",0); ("fold-left",0); ("fold-right",0); ("cons*",0); 
+                                ("apply",0); ("car",0);("cdr",0); ("cons",0); ("set-car!",0); ("set-cdr!",0);
                               ]                          
 
 
