@@ -35,6 +35,7 @@ let make_prologue consts_tbl fvars_tbl =
     (* Additional rational numebr ops *)
     "numerator", "numerator"; "denominator", "denominator"; "gcd", "gcd";
     (* you can add yours here *)
+    ("apply","apply"); ("car","car");("cdr","cdr"); ("cons","cons"); ("set-car!","set_car"); ("set-cdr!","set_cdr"); ("fold-left","fold_left"); ("fold-right","fold_right"); ("cons*","cons_klenee"); 
   ] in
   let make_primitive_closure (prim, label) =
     (* This implementation assumes fvars are addressed by an offset from the label `fvar_tbl`.
@@ -101,7 +102,25 @@ main:
 user_code_fragment:
 ;;; The code you compiled will be added here.
 ;;; It will be executed immediately after the closures for 
-;;; the primitive procedures are set up.\n";;
+;;; the primitive procedures are set up.\n
+
+
+apply:
+car:
+cdr:
+cons:
+set_car:
+set_cdr:
+fold_left:
+fold_right:
+cons_klenee:
+
+
+
+
+
+
+";;
 
 let clean_exit =
   ";;; Clean up the dummy frame, set the exit status to 0 (\"success\"), 
