@@ -41,6 +41,10 @@ module Code_Gen : CODE_GEN = struct
   let fvar_next_offset()= let v = !fvar_offset in
     (fvar_offset:= v+1 ; v);;
 
+  let lable_id = ref 0 ;;
+  let next_lable_id() = let v= !lable_id in
+    (lable_id:= v+1 ; !lable_id);;
+
 
   let rec get_tbl e tbl adder  =
     match e with
@@ -58,7 +62,9 @@ module Code_Gen : CODE_GEN = struct
     and map_flat f lst = (remove_dup (List.flatten (List.map f lst)))
 
     and remove_dup lst = List.fold_left (fun acc expr -> if (List.mem_assoc (fst expr) acc)  then acc else (expr::acc))  [] lst 
-
+  
+  let  idx_as_int expr tbl = (fst (List.assoc expr tbl));;
+  let  idx_as_str expr tbl =  try (string_of_int (idx_as_int expr tbl)) with Not_found -> "ERROR idx_as_str"  ;;
 
   let rec add_to_const_tbl expr tbl =
       match expr with
@@ -67,14 +73,12 @@ module Code_Gen : CODE_GEN = struct
       | Number(Fraction (n, d)) -> append_to_set (Sexpr(expr),(next_const_offset 17, "MAKE_LITERAL_RATIONAL("^string_of_int n^","^string_of_int d^")"))  tbl
       | String(s) ->  append_to_set (Sexpr(expr),(next_const_offset ((String.length s) + 9), "MAKE_LITERAL_STRING \""^(String.escaped s)^"\""))  tbl
       | Symbol(s) ->  (let n_tbl = add_to_const_tbl (String(s)) tbl in
-                      append_to_set (Sexpr(expr),(next_const_offset 9,"MAKE_LITERAL_SYMBOL(const_tbl+"^(idx_as_str (String(s)) n_tbl)^")"))  n_tbl)
+                      append_to_set (Sexpr(expr),(next_const_offset 9,"MAKE_LITERAL_SYMBOL(const_tbl+"^(idx_as_str (Sexpr(String(s))) n_tbl)^")"))  n_tbl)
       | Pair(car, cdr) ->  (let n_tbl = (add_to_const_tbl car (add_to_const_tbl cdr tbl)) in 
-                            append_to_set (Sexpr(expr),(next_const_offset 17,"MAKE_LITERAL_PAIR(const_tbl+"^(idx_as_str car n_tbl)^",const_tbl+"^(idx_as_str cdr n_tbl)^")"))  n_tbl)
+                            append_to_set (Sexpr(expr),(next_const_offset 17,"MAKE_LITERAL_PAIR(const_tbl+"^(idx_as_str (Sexpr(car)) n_tbl)^",const_tbl+"^(idx_as_str (Sexpr(cdr)) n_tbl)^")"))  n_tbl)
       | _ -> tbl
 
-    and idx_as_str expr tbl = try (string_of_int (fst (List.assoc (Sexpr(expr)) tbl)))  with Not_found -> "ERRPR_IN_idx_as_str"
     and append_to_set (a,(b,c)) tbl = if (List.mem_assoc a tbl) then tbl else  ((a,(b,c)):: tbl) 
-  
   
   let const_tbl_adder e tbl = 
     match e with 
@@ -86,6 +90,94 @@ module Code_Gen : CODE_GEN = struct
     | Var'(VarFree v) when (List.mem_assoc v tbl == false) -> ((v, fvar_next_offset()) :: tbl)
     | _ -> tbl
  
+  let print  = Printf.sprintf;;
+  let print_lst lst =  String.concat "\n" lst ;; 
+
+
+  let rec generate_rec consts fvars e count =
+    let generate_rec e = generate_rec consts fvars e count in
+    match e with
+    | Const'(c) -> print "mov rax, const_tbl+%s ; generate Const'(c)" (idx_as_str c consts)
+    | Var'(VarFree (v)) -> print "mov rax, qword [fvar_tbl+ WORD_SIZE * %s] ; generate Var'(VarFree (v))" (idx_as_str v fvars)
+    | Var'(VarParam (v,mn)) -> print "mov rax, qword [rbp+ WORD_SIZE * (4 + %d)] ; generate Var'(VarParam (v,mn))" mn
+    | Var'(VarBound (v,major,minor)) -> 
+          print_lst 
+            [ "; generate Var'(VarBound (v,major,minor))";
+              print " mov rax, qword [rbp+ WORD_SIZE * 2]" ;
+              print " mov rax, qword [rbp+ WORD_SIZE * %d]" major;
+              print " mov rax, qword [rbp+ WORD_SIZE * %d]" minor;]
+                      
+    
+    | (Set'(VarFree (v), e) | Def'(VarFree (v), e)) ->
+          print_lst 
+            [ "; generate Set'(Var'(VarFree (v)), e)";
+              print " %s \n" (generate_rec e) ;
+              print " mov qword [%s], rax" (idx_as_str v fvars);
+              print " mov rax, SOB_VOID_ADDRESS";]
+
+
+    | Set'(VarParam (_,mn), e) -> 
+          print_lst 
+            [ "; generate Set'(Var'(VarParam (_,mn)), e)";
+              print " %s \n" (generate_rec e) ;
+              print " mov qword [rbp+ WORD_SIZE * (4 + %d)], rax" mn;
+              print " mov rax, SOB_VOID_ADDRESS";]
+
+    | Set'(VarBound (v,major,minor),e) -> 
+          print_lst 
+            [ "; generate  Set'(Var'(VarBound (v,major,minor)),e)";
+              print " %s \n" (generate_rec e) ;
+              print " mov rbx, qword [rbp+ WORD_SIZE * 2]" ;
+              print " mov rbx, qword [rbp+ WORD_SIZE * %d]" major;
+              print " mov qword [rbp+ WORD_SIZE * %d], rax" minor;
+              " mov rax, SOB_VOID_ADDRESS";]
+
+
+
+    | Seq'(l)-> print_lst (List.map generate_rec l)
+
+    | Or'(l)-> let id = next_lable_id() in 
+          print_lst 
+            [ "; generate  Or'(l)";
+              print_lst (List.map (fun e -> (print "%s\n mov rax, SOB_FALSE_ADDRESS \n jne Lexit%d:" (generate_rec e) id )) l) ;
+              print "Lexit%d:" id]
+
+    
+    | If'(test, dit, dif)-> let id = next_lable_id() in 
+          print_lst 
+            [ "; generate  If'(test, dit, dif)";
+              (generate_rec test);
+              "cmp rax, SOB_FALSE_ADDRESS";
+              print "je Lelse%d: " id ;
+              (generate_rec dit);
+               print "je Lexit%d:\nLelse%d:" id id;
+              (generate_rec dif);
+              print "Lexit%d:" id;]
+
+    
+    | BoxGet'(v) -> print_lst [ "; generate  Boxget'(v)";  (generate_rec (Var'(v))); "mov rax, qword [rax]";]
+
+    | BoxSet'(v,e) -> 
+        print_lst 
+          [";generate  BoxSet'(v,e)";
+            (generate_rec e);
+            "push rax";
+            (generate_rec (Var'(v)));
+            "pop qword [rax]";
+            "mov rax, SOB_VOID_ADDRESS";]
+
+    
+    (*
+
+    | LambdaSimple'(_, body) -> 
+    | LambdaOpt'(_, _, body) -> 
+    | (Applic'(first, sexprs) 
+    | ApplicTP'(first, sexprs)) ->  *)
+     
+    | _ -> "tbl"
+  
+
+  
   
   let make_consts_tbl asts =
     let consts_tbl_init = 
