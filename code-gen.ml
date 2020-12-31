@@ -38,45 +38,26 @@ module Code_Gen : CODE_GEN = struct
     (const_offset:= v+off ; v);;
 
   let fvar_offset = ref 0 ;;
-  let fvar_next_offset = let v = !fvar_offset in
+  let fvar_next_offset()= let v = !fvar_offset in
     (fvar_offset:= v+1 ; v);;
 
-  let primitive_fvar_table =  
-    [
-      (* Type queries  *)
-      "boolean?"; "flonum?"; "rational?"; "pair?"; "null?"; "char?"; "string?"; "procedure?"; "symbol?"; 
-      (* String procedures *)
-      "string-length"; "string-ref"; "string-set!"; "make-string"; "symbol->string";
-      (* Type conversions *)
-      "char->integer"; "integer->char"; "exact->inexact";
-      (* Identity test *)
-      "eq?"; 
-      (* Arithmetic ops *)
-      "+"; "*"; "/"; "="; "<"; 
-      (* Additional rational numebr ops *)
-      "numerator"; "denominator"; "gcd"; 
-      (* you can add yours here *)
-      "apply"; "car"; "cdr"; "cons"; "set-car!"; "set-cdr!";
-    ]
-    
-    
 
-    let rec get_tbl e tbl adder  =
-      match e with
-      | Const'(s)-> (adder e tbl)
-      | Var'(VarFree v) -> (adder e tbl)
-      | BoxSet'(_,e) -> get_tbl e tbl adder
-      | If'(test, dit, dif)-> map_flat (fun e -> get_tbl e tbl adder) [test; dit; dif]
-      | (Seq'(l) | Or'(l)) -> map_flat (fun e -> get_tbl e tbl adder) l
-      | (Set'(_, e) | Def'(_, e)) ->  get_tbl e tbl adder
-      | LambdaSimple'(_, body) -> get_tbl body tbl adder
-      | LambdaOpt'(_, _, body) -> get_tbl body tbl adder
-      | (Applic'(first, sexprs) | ApplicTP'(first, sexprs)) -> map_flat (fun e -> get_tbl e tbl adder) (first::sexprs)
-      | _ -> tbl
-    
-      and map_flat f lst = (remove_dup (List.flatten (List.map f lst)))
+  let rec get_tbl e tbl adder  =
+    match e with
+    | Const'(s)-> (adder e tbl)
+    | Var'(VarFree v) -> (adder e tbl)
+    | BoxSet'(_,e) -> get_tbl e tbl adder
+    | If'(test, dit, dif)-> map_flat (fun e -> get_tbl e tbl adder) [test; dit; dif]
+    | (Seq'(l) | Or'(l)) -> map_flat (fun e -> get_tbl e tbl adder) l
+    | (Set'(_, e) | Def'(_, e)) ->  get_tbl e tbl adder
+    | LambdaSimple'(_, body) -> get_tbl body tbl adder
+    | LambdaOpt'(_, _, body) -> get_tbl body tbl adder
+    | (Applic'(first, sexprs) | ApplicTP'(first, sexprs)) -> map_flat (fun e -> get_tbl e tbl adder) (first::sexprs)
+    | _ -> tbl
+  
+    and map_flat f lst = (remove_dup (List.flatten (List.map f lst)))
 
-      and remove_dup lst = List.fold_left (fun acc expr -> if (List.mem_assoc (fst expr) acc)  then acc else (expr::acc))  [] lst 
+    and remove_dup lst = List.fold_left (fun acc expr -> if (List.mem_assoc (fst expr) acc)  then acc else (expr::acc))  [] lst 
 
 
   let rec add_to_const_tbl expr tbl =
@@ -100,7 +81,10 @@ module Code_Gen : CODE_GEN = struct
     | Const'(Sexpr(expr)) -> (add_to_const_tbl expr tbl)
     | _ -> tbl
 
- 
+  let fvar_tbl_adder e tbl = 
+    match e with 
+    | Var'(VarFree v) when (List.mem_assoc v tbl == false) -> ((v, fvar_next_offset()) :: tbl)
+    | _ -> tbl
  
   
   let make_consts_tbl asts =
@@ -114,7 +98,28 @@ module Code_Gen : CODE_GEN = struct
     let adrs_sort = List.sort (fun (a1,(b1,c1)) (a2,(b2,c2)) -> if b1 > b2 then 1 else 0) in
     adrs_sort (List.fold_left (fun tbl e -> get_tbl e tbl const_tbl_adder) consts_tbl_init asts);; 
     
-  let make_fvars_tbl asts = List.map (fun a -> (a, fvar_next_offset)) primitive_fvar_table;;
-  let generate consts fvars e = "raise X_not_yet_implemented";;
+  let make_fvars_tbl asts = 
+    let primitive_fvar_table = List.map (fun a -> (a, fvar_next_offset()))
+      [
+        (* Type queries  *)
+        "boolean?"; "flonum?"; "rational?"; "pair?"; "null?"; "char?"; "string?"; "procedure?"; "symbol?"; 
+        (* String procedures *)
+        "string-length"; "string-ref"; "string-set!"; "make-string"; "symbol->string";
+        (* Type conversions *)
+        "char->integer"; "integer->char"; "exact->inexact";
+        (* Identity test *)
+        "eq?"; 
+        (* Arithmetic ops *)
+        "+"; "*"; "/"; "="; "<"; 
+        (* Additional rational numebr ops *)
+        "numerator"; "denominator"; "gcd"; 
+        (* you can add yours here *)
+        "apply"; "car"; "cdr"; "cons"; "set-car!"; "set-cdr!"; ] in   
+
+        (List.fold_left (fun tbl e -> get_tbl e tbl fvar_tbl_adder) primitive_fvar_table asts);; 
+  
+  
+  
+        let generate consts fvars e = "raise X_not_yet_implemented";;
 end;;
 
