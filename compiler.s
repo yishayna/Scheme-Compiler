@@ -123,6 +123,11 @@
         dq %3
 %endmacro
 
+%macro MAKE_LITERAL 2 
+	db %1
+	%2
+%endmacro
+
 %define MAKE_RATIONAL(r, num, den) \
 	MAKE_TWO_WORDS r, T_RATIONAL, num, den
 
@@ -138,7 +143,13 @@
 %define MAKE_CLOSURE(r, env, body) \
         MAKE_TWO_WORDS r, T_CLOSURE, env, body
 
-	
+%define MAKE_LITERAL_CHAR(val) MAKE_LITERAL T_CHAR, db val
+%define MAKE_LITERAL_SYMBOL(val) MAKE_LITERAL T_SYMBOL, dq val
+%define MAKE_LITERAL_FLOAT(val) MAKE_LITERAL T_FLOAT, dq val
+%define MAKE_BOOL(val) MAKE_LITERAL T_BOOL, db val
+%define MAKE_NIL db T_NIL
+%define MAKE_VOID db T_VOID
+
 ;;; Macros and routines for printing Scheme OBjects to STDOUT
 %define CHAR_NUL 0
 %define CHAR_TAB 9

@@ -63,8 +63,8 @@ module Code_Gen : CODE_GEN = struct
 
     let rec get_tbl e tbl adder  =
       match e with
-      | Const'(s)-> tbl@(adder e tbl)
-      | Var'(VarFree v) -> tbl@(adder e tbl)
+      | Const'(s)-> (adder e tbl)
+      | Var'(VarFree v) -> (adder e tbl)
       | BoxSet'(_,e) -> get_tbl e tbl adder
       | If'(test, dit, dif)-> map_flat (fun e -> get_tbl e tbl adder) [test; dit; dif]
       | (Seq'(l) | Or'(l)) -> map_flat (fun e -> get_tbl e tbl adder) l
@@ -72,9 +72,11 @@ module Code_Gen : CODE_GEN = struct
       | LambdaSimple'(_, body) -> get_tbl body tbl adder
       | LambdaOpt'(_, _, body) -> get_tbl body tbl adder
       | (Applic'(first, sexprs) | ApplicTP'(first, sexprs)) -> map_flat (fun e -> get_tbl e tbl adder) (first::sexprs)
-      | _ -> []
+      | _ -> tbl
     
-      and map_flat f lst = List.flatten (List.map f lst)
+      and map_flat f lst = (remove_dup (List.flatten (List.map f lst)))
+
+      and remove_dup lst = List.fold_left (fun acc expr -> if (List.mem_assoc (fst expr) acc)  then acc else (expr::acc))  [] lst 
 
 
   let rec add_to_const_tbl expr tbl =
@@ -82,32 +84,37 @@ module Code_Gen : CODE_GEN = struct
       | Char(c) ->  append_to_set (Sexpr(expr), (next_const_offset 2, "MAKE_LITERAL_CHAR("^(string_of_int (Char.code c))^")"))  tbl
       | Number(Float f) -> append_to_set (Sexpr(expr),(next_const_offset 9, "MAKE_LITERAL_FLOAT("^(string_of_float f)^")"))  tbl
       | Number(Fraction (n, d)) -> append_to_set (Sexpr(expr),(next_const_offset 17, "MAKE_LITERAL_RATIONAL("^string_of_int n^","^string_of_int d^")"))  tbl
-      | String(s) ->  append_to_set (Sexpr(expr),((next_const_offset ((String.length s) + 9), "MAKE_LITERAL_STRING \""^(String.escaped s)^"\"")))  tbl
-      | Symbol(s) ->  append_to_set (Sexpr(expr),(next_const_offset 9,"MAKE_LITERAL_SYMBOL(const_tbl+"^(idx_as_str expr tbl)^")"))  tbl
+      | String(s) ->  append_to_set (Sexpr(expr),(next_const_offset ((String.length s) + 9), "MAKE_LITERAL_STRING \""^(String.escaped s)^"\""))  tbl
+      | Symbol(s) ->  (let n_tbl = add_to_const_tbl (String(s)) tbl in
+                      append_to_set (Sexpr(expr),(next_const_offset 9,"MAKE_LITERAL_SYMBOL(const_tbl+"^(idx_as_str (String(s)) n_tbl)^")"))  n_tbl)
       | Pair(car, cdr) ->  (let n_tbl = (add_to_const_tbl car (add_to_const_tbl cdr tbl)) in 
                             append_to_set (Sexpr(expr),(next_const_offset 17,"MAKE_LITERAL_PAIR(const_tbl+"^(idx_as_str car n_tbl)^",const_tbl+"^(idx_as_str cdr n_tbl)^")"))  n_tbl)
-      | _ -> []
+      | _ -> tbl
 
-    and idx_as_str expr tbl = (string_of_int (fst (List.assoc expr tbl)))
-    and append_to_set (a,(b,c)) tbl = if (List.mem_assoc a tbl) then tbl else  ((a,(b,c)) :: tbl) 
+    and idx_as_str expr tbl = try (string_of_int (fst (List.assoc (Sexpr(expr)) tbl)))  with Not_found -> "ERRPR_IN_idx_as_str"
+    and append_to_set (a,(b,c)) tbl = if (List.mem_assoc a tbl) then tbl else  ((a,(b,c)):: tbl) 
+  
   
   let const_tbl_adder e tbl = 
     match e with 
-    | Const'(Sexpr(expr)) -> add_to_const_tbl expr tbl
-    | _ -> []
+    | Const'(Sexpr(expr)) -> (add_to_const_tbl expr tbl)
+    | _ -> tbl
 
  
-  let consts_tbl_init = 
-    [ (Void, (next_const_offset 1, "MAKE_VOID")); 
-      (Sexpr (Nil), (next_const_offset 1, "MAKE_NIL")); 
-      (Sexpr(Bool false), (next_const_offset 2, "MAKE_BOOL(0)")); 
-      (Sexpr(Bool true), (next_const_offset 2,"MAKE_BOOL(1)")); 
-    ]
+ 
   
-  let make_consts_tbl asts =  List.fold_left (fun tbl e -> get_tbl e tbl const_tbl_adder) consts_tbl_init asts;;
-  
+  let make_consts_tbl asts =
+    let consts_tbl_init = 
+      [ (Void, (next_const_offset 1, "MAKE_VOID")); 
+        (Sexpr (Nil), (next_const_offset 1, "MAKE_NIL")); 
+        (Sexpr(Bool false), (next_const_offset 2, "MAKE_BOOL(0)")); 
+        (Sexpr(Bool true), (next_const_offset 2,"MAKE_BOOL(1)")); 
+      ] in
+    
+    let adrs_sort = List.sort (fun (a1,(b1,c1)) (a2,(b2,c2)) -> if b1 > b2 then 1 else 0) in
+    adrs_sort (List.fold_left (fun tbl e -> get_tbl e tbl const_tbl_adder) consts_tbl_init asts);; 
     
   let make_fvars_tbl asts = List.map (fun a -> (a, fvar_next_offset)) primitive_fvar_table;;
-  let generate consts fvars e = raise X_not_yet_implemented;;
+  let generate consts fvars e = "raise X_not_yet_implemented";;
 end;;
 
