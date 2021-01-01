@@ -167,8 +167,6 @@ module Code_Gen : CODE_GEN = struct
             "mov rax, SOB_VOID_ADDRESS";]
 
     
-    
-
     | LambdaSimple'(args, body) -> lambda_writer consts fvars env_num args body []
     | LambdaOpt'(args, opt , body) -> lambda_writer consts fvars env_num args body [opt]
     (* | (Applic'(first, sexprs) 
@@ -176,8 +174,63 @@ module Code_Gen : CODE_GEN = struct
      
     | _ -> "tbl"
   
-  and make_ext_env env_num =
-    
+  
+  
+  and make_ext_env env_num id =
+    let copy_minors = print_lst
+                        [ "; generate - make_ext_env - copy_minors";
+                          "; invariant: rbx hold EXT_ENV[0]";
+                          "push rbx                     ; backup rbx";
+                          "mov rax, LAST_ENV";
+                          "mov rcx, 0                   ; i = 0 ";
+                          "mov rdx, WORD_SIZE";
+                          "add rdx, rbx                 ; rdx = ExtEnv[j], j = 1";
+                          print "copy_minors%d:" id ;
+                          "push rcx                     ; backup rcx - our loop register" ;
+                          "add rcx, rax                 ; set rcx to point to the specific source cell ENV[i]  (i=j-1)";
+                          "mov rcx, [rcx]               ; copy the content of ENV[i] to rcx";
+                          "mov [rdx], rcx               ; set the content of EXT_ENV[j] to the content of ENV[i]";
+                          "add rdx, WORD_SIZE           ; prepare rdx to the next loop"            
+                          "pop rcx                      ; load rcx with the loop counter";
+                          "add rcx, WORD_SIZE           ; prepare rcx to the next loop"            
+                          print "cmp rcx, WORD_SIZE*%d            ; while i<|ENV|" env_num;
+                          print "jne copy_minors%d" id ;
+                          "pop rbx                      ; load rbx from backup ";] in
+  
+    let copy_params = print_lst 
+                        [ "; generate - make_ext_env - copy_params";
+                          "; invariant: rbx hold EXT_ENV[0]";
+                          "push rbx                       ; backup rbx";
+                          "mov rcx, NUM_OF_ARGS";
+                          "inc rcx                        ; reserve one WORD for the magic" ;            
+                          print "MALLOC rax,  WORD_SIZE*rcx" ;
+                          "mov [rbx], rax                 ; set EXT_ENV[0] to point on new vector of size WORD_SIZE*(NUM_OF_ARGS+1)";
+                          "mov rax, [rbx]                 ; rax = EXT_ENV[0][0]";
+                          "lea rdx, FIRST_ARG_ON_STACK";
+                          
+                          "; ATTENTION !!!"; 
+                          "we ruined rbx content for using this next loop ";
+                          "we reserved his value in the stack and will pop in the end of this fragment";
+                          
+                          "mov rcx, 0";
+                          print "copy_params%d:" id ;
+                          "mov rbx, NUM_OF_ARGS";
+                          "cmp rcx, rbx";
+                          print "je all_params_copied%d" id ;
+                          "mov rbx, [rdx + WORD_SIZE*rcx] ; load rbx with the content of ARGS[i]";
+                          "mov [rax + WORD_SIZE*rcx], rbx ; copy EXT_ENV[0][i] = ARGS[i]";
+                          "inc rcx"
+                          print "jmp copy_params%d" id ;
+                          print "all_params_copied%d:" id;
+                          "pop rbx                        ; load rbx from backup ";] in
+
+      print_lst 
+        [";generate  make_ext_env";
+          print "MALLOC rbx, WORD_SIZE*%d" (env_num + 1);
+          (copy_params);
+          (copy_minors);
+        ]
+
 
 
   and adjust_stack args_count =
@@ -187,20 +240,20 @@ module Code_Gen : CODE_GEN = struct
     let id = next_lable_id() in 
     let m_args = args@opt in
     let num_of_args = (string_of_int (List.length args)) in
-    let ext_env =  if env_num = 0 then "mov rbx, SOB_VOID_ADDRESS" else make_ext_env env_num in
+    let ext_env_to_rbx =  if env_num = 0 then "mov rbx, SOB_VOID_ADDRESS" else (make_ext_env env_num  id) in
     let adjust_stack_if_needed = (if opt = [] then "" else (adjust_stack num_of_args)) in
     let jump_error_if_illegal_args_count =  (if opt = [] then "jne illegal_args_count" else "jl illegal_args_count") in
     let body_code =  (generate_rec consts fvars e (env_num + 1)) in
 
     print_lst 
     [";generate  lambda_writer";
-      ext_env;
+      ext_env_to_rbx;
       print "MAKE_CLOSURE(rax,rbx, Lcode%d)" id ;
       print " jmp Lcont%d "  id ;
       print "Lcode%d:" id ;
       "push rbp";
       "mov rbp, rsp";
-      print "cmp qword [rbp+ WORD_SIZE*3], %d" num_of_args;
+      print "cmp qword NUM_OF_ARGS, %d" num_of_args;
       jump_error_if_illegal_args_count;
       adjust_stack_if_needed;
       body_code;

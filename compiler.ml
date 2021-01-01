@@ -72,6 +72,11 @@ const_tbl:
 %define SOB_NIL_ADDRESS const_tbl+" ^ (string_of_int (fst (List.assoc (Sexpr Nil) consts_tbl))) ^ "
 %define SOB_FALSE_ADDRESS const_tbl+" ^ (string_of_int (fst (List.assoc (Sexpr (Bool false)) consts_tbl))) ^ "
 %define SOB_TRUE_ADDRESS const_tbl+" ^ (string_of_int  (fst (List.assoc (Sexpr (Bool true)) consts_tbl))) ^ "
+%define LAST_ENV  [rbp + 8*2] 
+%define NUM_OF_ARGS  [rbp+ 8*3] 
+%define FIRST_ARG_ON_STACK  [rbp+ 8*4]
+
+
 
 global main
 section .text
