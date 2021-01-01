@@ -94,8 +94,8 @@ module Code_Gen : CODE_GEN = struct
   let print_lst lst =  String.concat "\n" lst ;; 
 
 
-  let rec generate_rec consts fvars e count =
-    let generate_rec e = generate_rec consts fvars e count in
+  let rec generate_rec consts fvars e env_num =
+    let generate_rec e = generate_rec consts fvars e env_num in
     match e with
     | Const'(c) -> print "mov rax, const_tbl+%s ; generate Const'(c)" (idx_as_str c consts)
     | Var'(VarFree (v)) -> print "mov rax, qword [fvar_tbl+ WORD_SIZE * %s] ; generate Var'(VarFree (v))" (idx_as_str v fvars)
@@ -167,17 +167,48 @@ module Code_Gen : CODE_GEN = struct
             "mov rax, SOB_VOID_ADDRESS";]
 
     
-    (*
+    
 
-    | LambdaSimple'(_, body) -> 
-    | LambdaOpt'(_, _, body) -> 
-    | (Applic'(first, sexprs) 
-    | ApplicTP'(first, sexprs)) ->  *)
+    | LambdaSimple'(args, body) -> lambda_writer consts fvars env_num args body []
+    | LambdaOpt'(args, opt , body) -> lambda_writer consts fvars env_num args body [opt]
+    (* | (Applic'(first, sexprs) 
+    | ApplicTP'(first, sexprs)) ->   *)
      
     | _ -> "tbl"
   
+  and make_ext_env env_num =
+    
 
-  
+
+  and adjust_stack args_count =
+
+
+  and lambda_writer consts fvars env_num args body opt =
+    let id = next_lable_id() in 
+    let m_args = args@opt in
+    let num_of_args = (string_of_int (List.length args)) in
+    let ext_env =  if env_num = 0 then "mov rbx, SOB_VOID_ADDRESS" else make_ext_env env_num in
+    let adjust_stack_if_needed = (if opt = [] then "" else (adjust_stack num_of_args)) in
+    let jump_error_if_illegal_args_count =  (if opt = [] then "jne illegal_args_count" else "jl illegal_args_count") in
+    let body_code =  (generate_rec consts fvars e (env_num + 1)) in
+
+    print_lst 
+    [";generate  lambda_writer";
+      ext_env;
+      print "MAKE_CLOSURE(rax,rbx, Lcode%d)" id ;
+      print " jmp Lcont%d "  id ;
+      print "Lcode%d:" id ;
+      "push rbp";
+      "mov rbp, rsp";
+      print "cmp qword [rbp+ WORD_SIZE*3], %d" num_of_args;
+      jump_error_if_illegal_args_count;
+      adjust_stack_if_needed;
+      body_code;
+      "leave";
+      "ret";
+      print "Lcont%d:"  id ;
+     ]
+
   
   let make_consts_tbl asts =
     let consts_tbl_init = 

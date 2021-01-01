@@ -316,6 +316,18 @@ section .data
 .regular:
 	db "#\%c", 0
 
+
+illegal_args_count:
+	push rbp
+	mov rbp, rsp
+
+	mov rax, 0
+	mov rdi, args_error
+	call printf
+
+	pop rbp
+	ret
+
 write_sob_void:
 	push rbp
 	mov rbp, rsp
@@ -330,6 +342,8 @@ write_sob_void:
 section .data
 .void:
 	db "#<void>", 0
+.args_error:
+	db "Illegal number of args", 10, 0
 	
 write_sob_bool:
 	push rbp
