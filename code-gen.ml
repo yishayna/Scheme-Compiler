@@ -186,13 +186,12 @@ module Code_Gen : CODE_GEN = struct
                           "mov rdx, WORD_SIZE";
                           "add rdx, rbx                 ; rdx = ExtEnv[j], j = 1";
                           print "copy_minors%d:" id ;
-                          "push rcx                     ; backup rcx - our loop register" ;
-                          "add rcx, rax                 ; set rcx to point to the specific source cell ENV[i]  (i=j-1)";
-                          "mov rcx, [rcx]               ; copy the content of ENV[i] to rcx";
-                          "mov [rdx], rcx               ; set the content of EXT_ENV[j] to the content of ENV[i]";
-                          "add rdx, WORD_SIZE           ; prepare rdx to the next loop"            
-                          "pop rcx                      ; load rcx with the loop counter";
-                          "add rcx, WORD_SIZE           ; prepare rcx to the next loop"            
+                          "mov r8, rcx                  ; load the index (in bites) to r8" ;
+                          "add r8, rax                  ; set r8 to point to the specific source cell ENV[i]  (i=j-1)";
+                          "mov r8, [r8]                 ; copy the content of ENV[i] to r8";
+                          "mov [rdx], r8                ; set the content of EXT_ENV[j] to the content of ENV[i]";
+                          "add rdx, WORD_SIZE           ; prepare rdx to the next loop" ;           
+                          "add rcx, WORD_SIZE           ; prepare rcx to the next loop" ;           
                           print "cmp rcx, WORD_SIZE*%d            ; while i<|ENV|" env_num;
                           print "jne copy_minors%d" id ;
                           "pop rbx                      ; load rbx from backup ";] in
@@ -207,19 +206,15 @@ module Code_Gen : CODE_GEN = struct
                           "mov [rbx], rax                 ; set EXT_ENV[0] to point on new vector of size WORD_SIZE*(NUM_OF_ARGS+1)";
                           "mov rax, [rbx]                 ; rax = EXT_ENV[0][0]";
                           "lea rdx, FIRST_ARG_ON_STACK";
-                          
-                          "; ATTENTION !!!"; 
-                          "we ruined rbx content for using this next loop ";
-                          "we reserved his value in the stack and will pop in the end of this fragment";
-                          
+                                                    
                           "mov rcx, 0";
                           print "copy_params%d:" id ;
-                          "mov rbx, NUM_OF_ARGS";
-                          "cmp rcx, rbx";
+                          "mov r8, NUM_OF_ARGS";
+                          "cmp rcx, r8";
                           print "je all_params_copied%d" id ;
-                          "mov rbx, [rdx + WORD_SIZE*rcx] ; load rbx with the content of ARGS[i]";
-                          "mov [rax + WORD_SIZE*rcx], rbx ; copy EXT_ENV[0][i] = ARGS[i]";
-                          "inc rcx"
+                          "mov r8, [rdx + WORD_SIZE*rcx] ; load r8 with the content of ARGS[i]";
+                          "mov [rax + WORD_SIZE*rcx], r8 ; copy EXT_ENV[0][i] = ARGS[i]";
+                          "inc rcx";
                           print "jmp copy_params%d" id ;
                           print "all_params_copied%d:" id;
                           "pop rbx                        ; load rbx from backup ";] in
@@ -233,17 +228,88 @@ module Code_Gen : CODE_GEN = struct
 
 
 
-  and adjust_stack args_count =
+  and adjust_stack num_of_args id =
+    (*Invariant: These "OCAML MACROS" using r10+ registers unless it explicitly mentioned in the name  *)
+    let num_args_stack_in_bites_to_r10 = "mov r10, NUM_OF_ARGS \n shl r10, 8" in 
+    let args_diff_to_ecx =  (print "mov rcx, NUM_OF_ARGS \nsub rcx, %s" num_of_args) in
+    let last_arg_pointer_to_r12 = print_lst ["lea r12, FIRST_ARG_ON_STACK"; (num_args_stack_in_bites_to_r10); "add r12, r10"] in
+    
+    let shrink_extra_args_to_lst_in_rax = 
+        print_lst 
+          [";generate  adjust_stack";
+          "; invariant: after calling rax holding the new args pairs list";
+          (last_arg_pointer_to_r12);
+            "mov r9, SOB_NIL_ADDRESS           ; we want to build an proper list, so the last val is NIL"; 
+            (args_diff_to_ecx);
+            print "adjust_loop%d: \n cmp rcx, 0" id;
+            print "je shrink_stack_end%d" id;
+            "mov r8, [rbx]";
+            "MAKE_PAIR(rax,r8,r9)               ; rax = pointer to the new pair, r8 = car, r9 = cdr";
+            "mov r9, rax                        ; to make the list we need to add this list to be the cdr in the next loop";
+            "sub r12, WORD_SIZE                 ; decrease r12 to point on the previos element for the next loop";
+            print "dec rcx \n jmp adjust_loop%d" id;
+            print "shrink_stack_end%d:" id;] in
 
+    let enlarge_frame_and_finish_if_nedded =
+        print_lst 
+          [ (args_diff_to_ecx);
+            "cmp ecx, 0                       ; we don't using opt args -> magic cell get an empty list";
+            print "jne continue_adjust_stack%d" id;
+            "mov r13, SOB_NIL_ADDRESS         ;"  ;
+            (last_arg_pointer_to_r12);
+            "add r12, WORD_SIZE";
+            "mov qword [r12], r13" ;
+            (print "jmp adjust_stack_end%d" id);] in
+      
+    
+    let update_num_of_args_in_stack = 
+        print_lst 
+        [";generate  update_num_of_args_in_stack";
+         print "lea rbx, NUM_OF_ARGS" ;
+         print "mov qword [rbx], %d           ; num of requierd args + 1 for opt" ((int_of_string num_of_args) + 1);
+        ] in
+
+    let shrink_frame =  
+      print_lst 
+      [";generate  shrink_frame";
+        (last_arg_pointer_to_r12);
+        "mov qword [r12], eax                 ; set the last arg to be the pair list of optional args";
+        "sub r12, WORD_SIZE                   ; this is now the last free cell for shrinking ";                  
+        "mov ebx, ebp                         ; get the first element from stack to shrink";
+        (args_diff_to_ecx);
+        (print "shrink_frame%d:" id);
+        "cmp ecx, 0";
+        (print "je adjust_stack_end%d" id);
+        "mov r10, [ebx]                       ; r10 <- current value to move up";
+        "mov qword [r12], r10                 ; r12 holds the last free cell foor shrink";
+        "sub r12, WORD_SIZE";
+        "add rbx, WORD_SIZE                   ; go the the next element for shrinking";
+        "add rbp, WORD_SIZE                   ; delete old element from stack";
+        "dec ecx";
+        (print "jmp shrink_frame%d" id);
+        ] in
+   
+   
+    print_lst 
+        [";generate  adjust_stack";
+          (shrink_extra_args_to_lst_in_rax);
+          (enlarge_frame_and_finish_if_nedded);
+
+          print "continue_adjust_stack%d:" id;
+          (update_num_of_args_in_stack);
+          (shrink_frame);
+          (print "adjust_stack_end%d" id);
+          ] 
+
+   
 
   and lambda_writer consts fvars env_num args body opt =
     let id = next_lable_id() in 
-    let m_args = args@opt in
     let num_of_args = (string_of_int (List.length args)) in
     let ext_env_to_rbx =  if env_num = 0 then "mov rbx, SOB_VOID_ADDRESS" else (make_ext_env env_num  id) in
-    let adjust_stack_if_needed = (if opt = [] then "" else (adjust_stack num_of_args)) in
+    let adjust_stack_if_needed = (if opt = [] then "" else (adjust_stack num_of_args id)) in
     let jump_error_if_illegal_args_count =  (if opt = [] then "jne illegal_args_count" else "jl illegal_args_count") in
-    let body_code =  (generate_rec consts fvars e (env_num + 1)) in
+    let body_code =  (generate_rec consts fvars body (env_num + 1)) in
 
     print_lst 
     [";generate  lambda_writer";
@@ -253,13 +319,14 @@ module Code_Gen : CODE_GEN = struct
       print "Lcode%d:" id ;
       "push rbp";
       "mov rbp, rsp";
-      print "cmp qword NUM_OF_ARGS, %d" num_of_args;
+      print "cmp qword NUM_OF_ARGS, %s" num_of_args;
       jump_error_if_illegal_args_count;
       adjust_stack_if_needed;
       body_code;
       "leave";
       "ret";
       print "Lcont%d:"  id ;
+      (* RETURN VALUE????*)
      ]
 
   
