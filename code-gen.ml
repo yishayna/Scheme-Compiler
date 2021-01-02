@@ -45,26 +45,30 @@ module Code_Gen : CODE_GEN = struct
   let next_lable_id() = let v= !lable_id in
     (lable_id:= v+1 ; !lable_id);;
 
-
   let rec get_tbl e tbl adder  =
     match e with
     | Const'(s)-> (adder e tbl)
-    | Var'(VarFree v) -> (adder e tbl)
-    | BoxSet'(_,e) -> get_tbl e tbl adder
-    | If'(test, dit, dif)-> map_flat (fun e -> get_tbl e tbl adder) [test; dit; dif]
-    | (Seq'(l) | Or'(l)) -> map_flat (fun e -> get_tbl e tbl adder) l
-    | (Set'(_, e) | Def'(_, e)) ->  get_tbl e tbl adder
+    | Var'(v) -> (adder e tbl)
+    | Box'(v) -> (adder (Var' v) tbl)
+    | BoxGet'(v) -> (adder (Var' v) tbl)
+    | BoxSet'(v,e) -> get_all_tbl [ (Var' v); e] tbl adder  
+    | If'(test, dit, dif)-> get_all_tbl [test; dit; dif] tbl adder  
+    | (Seq'(l) | Or'(l)) ->  get_all_tbl l tbl adder 
+    | (Set'(v, e) | Def'(v, e)) -> get_all_tbl [(Var' v);e] tbl adder 
     | LambdaSimple'(_, body) -> get_tbl body tbl adder
     | LambdaOpt'(_, _, body) -> get_tbl body tbl adder
-    | (Applic'(first, sexprs) | ApplicTP'(first, sexprs)) -> map_flat (fun e -> get_tbl e tbl adder) (first::sexprs)
+    | (Applic'(first, sexprs) | ApplicTP'(first, sexprs)) ->  get_all_tbl (first::sexprs) tbl adder 
     | _ -> tbl
   
-    and map_flat f lst = (remove_dup (List.flatten (List.map f lst)))
-
-    and remove_dup lst = List.fold_left (fun acc expr -> if (List.mem_assoc (fst expr) acc)  then acc else (expr::acc))  [] lst 
+    and get_all_tbl lst tbl adder  = (List.fold_right (fun e acc ->  (get_tbl e acc adder)) lst tbl)
+    
+    (* and map_flat f lst = (remove_dup (List.flatten (List.map f lst)))
+    and remove_dup lst =   List.fold_left (fun acc expr -> if (List.mem_assoc (fst expr) acc)  then acc else (expr::acc))  [] lst  *)
   
   let  idx_as_int expr tbl = (fst (List.assoc expr tbl));;
   let  idx_as_str expr tbl =  try (string_of_int (idx_as_int expr tbl)) with Not_found -> "ERROR idx_as_str"  ;;
+  let  idx_as_str_fvars expr tbl =  try (string_of_int (List.assoc expr tbl)) with Not_found -> ("ERROR_idx_as_str "^expr)  ;;
+
 
   let rec add_to_const_tbl expr tbl =
       match expr with
@@ -87,7 +91,7 @@ module Code_Gen : CODE_GEN = struct
 
   let fvar_tbl_adder e tbl = 
     match e with 
-    | Var'(VarFree v) when (List.mem_assoc v tbl == false) -> ((v, fvar_next_offset()) :: tbl)
+    | Var'(VarFree v) when (List.mem_assoc v tbl = false) -> tbl@[(v, fvar_next_offset())]
     | _ -> tbl
  
   let print  = Printf.sprintf;;
@@ -95,10 +99,10 @@ module Code_Gen : CODE_GEN = struct
 
 
   let rec generate_rec consts fvars e env_num =
-    let generate_rec e = generate_rec consts fvars e env_num in
+    let generate_rec_call e =  generate_rec consts fvars e env_num in
     match e with
-    | Const'(c) -> print "mov rax, const_tbl+%s ; generate Const'(c)" (idx_as_str c consts)
-    | Var'(VarFree (v)) -> print "mov rax, qword [fvar_tbl+ WORD_SIZE * %s] ; generate Var'(VarFree (v))" (idx_as_str v fvars)
+    | Const'(c) -> print "mov rax, [const_tbl+%s] ; generate Const'(c)" (idx_as_str c consts)
+    | Var'(VarFree (v)) -> print "mov rax, qword [fvar_tbl+ WORD_SIZE * %s] ; generate Var'(VarFree (v))" (idx_as_str_fvars v fvars)
     | Var'(VarParam (v,mn)) -> print "mov rax, qword [rbp+ WORD_SIZE * (4 + %d)] ; generate Var'(VarParam (v,mn))" mn
     | Var'(VarBound (v,major,minor)) -> 
           print_lst 
@@ -111,22 +115,22 @@ module Code_Gen : CODE_GEN = struct
     | (Set'(VarFree (v), e) | Def'(VarFree (v), e)) ->
           print_lst 
             [ "; generate Set'(Var'(VarFree (v)), e)";
-              print " %s \n" (generate_rec e) ;
-              print " mov qword [%s], rax" (idx_as_str v fvars);
+              print " %s \n" (generate_rec_call e) ;
+              print " mov qword [%s], rax" (idx_as_str_fvars v fvars);
               print " mov rax, SOB_VOID_ADDRESS";]
 
 
     | Set'(VarParam (_,mn), e) -> 
           print_lst 
             [ "; generate Set'(Var'(VarParam (_,mn)), e)";
-              print " %s \n" (generate_rec e) ;
+              print " %s \n" (generate_rec_call e) ;
               print " mov qword [rbp+ WORD_SIZE * (4 + %d)], rax" mn;
               print " mov rax, SOB_VOID_ADDRESS";]
 
     | Set'(VarBound (v,major,minor),e) -> 
           print_lst 
             [ "; generate  Set'(Var'(VarBound (v,major,minor)),e)";
-              print " %s \n" (generate_rec e) ;
+              print " %s \n" (generate_rec_call e) ;
               print " mov rbx, qword [rbp+ WORD_SIZE * 2]" ;
               print " mov rbx, qword [rbp+ WORD_SIZE * %d]" major;
               print " mov qword [rbp+ WORD_SIZE * %d], rax" minor;
@@ -134,45 +138,45 @@ module Code_Gen : CODE_GEN = struct
 
 
 
-    | Seq'(l)-> print_lst (List.map generate_rec l)
+    | Seq'(l)-> print_lst (List.map generate_rec_call l)
 
     | Or'(l)-> let id = next_lable_id() in 
           print_lst 
             [ "; generate  Or'(l)";
-              print_lst (List.map (fun e -> (print "%s\n mov rax, SOB_FALSE_ADDRESS \n jne Lexit%d:" (generate_rec e) id )) l) ;
+              print_lst (List.map (fun e -> (print "%s\n mov rax, SOB_FALSE_ADDRESS \n jne Lexit%d" (generate_rec_call e) id )) l) ;
               print "Lexit%d:" id]
 
     
     | If'(test, dit, dif)-> let id = next_lable_id() in 
           print_lst 
             [ "; generate  If'(test, dit, dif)";
-              (generate_rec test);
+              (generate_rec_call test);
               "cmp rax, SOB_FALSE_ADDRESS";
-              print "je Lelse%d: " id ;
-              (generate_rec dit);
-               print "je Lexit%d:\nLelse%d:" id id;
-              (generate_rec dif);
+              print "je Lelse%d " id ;
+              (generate_rec_call dit);
+               print "je Lexit%d\nLelse%d:" id id;
+              (generate_rec_call dif);
               print "Lexit%d:" id;]
 
     
-    | BoxGet'(v) -> print_lst [ "; generate  Boxget'(v)";  (generate_rec (Var'(v))); "mov rax, qword [rax]";]
+    | BoxGet'(v) -> print_lst [ "; generate  Boxget'(v)";  (generate_rec_call (Var'(v))); "mov rax, qword [rax]";]
 
     | BoxSet'(v,e) -> 
         print_lst 
           [";generate  BoxSet'(v,e)";
-            (generate_rec e);
+            (generate_rec_call e);
             "push rax";
-            (generate_rec (Var'(v)));
+            (generate_rec_call (Var'(v)));
             "pop qword [rax]";
             "mov rax, SOB_VOID_ADDRESS";]
 
     
     | LambdaSimple'(args, body) -> lambda_writer consts fvars env_num args body []
     | LambdaOpt'(args, opt , body) -> lambda_writer consts fvars env_num args body [opt]
-    (* | (Applic'(first, sexprs) 
-    | ApplicTP'(first, sexprs)) ->   *)
+    | Applic'(first, sexprs) -> applic_writer consts fvars env_num first sexprs false
+    | ApplicTP'(first, sexprs) ->  applic_writer consts fvars env_num first sexprs true
      
-    | _ -> "tbl"
+    | _ -> ""
   
   
   
@@ -202,7 +206,8 @@ module Code_Gen : CODE_GEN = struct
                           "push rbx                       ; backup rbx";
                           "mov rcx, NUM_OF_ARGS";
                           "inc rcx                        ; reserve one WORD for the magic" ;            
-                          print "MALLOC rax,  WORD_SIZE*rcx" ;
+                          "shl rcx, 3";
+                          print "MALLOC rax, rcx" ;
                           "mov [rbx], rax                 ; set EXT_ENV[0] to point on new vector of size WORD_SIZE*(NUM_OF_ARGS+1)";
                           "mov rax, [rbx]                 ; rax = EXT_ENV[0][0]";
                           "lea rdx, FIRST_ARG_ON_STACK";
@@ -230,8 +235,8 @@ module Code_Gen : CODE_GEN = struct
 
   and adjust_stack num_of_args id =
     (*Invariant: These "OCAML MACROS" using r10+ registers unless it explicitly mentioned in the name  *)
-    let num_args_stack_in_bites_to_r10 = "mov r10, NUM_OF_ARGS \n shl r10, 8" in 
-    let args_diff_to_ecx =  (print "mov rcx, NUM_OF_ARGS \nsub rcx, %s" num_of_args) in
+    let num_args_stack_in_bites_to_r10 = "mov r10, NUM_OF_ARGS \n shl r10, 3" in 
+    let args_diff_to_rcx =  (print "mov rcx, NUM_OF_ARGS \nsub rcx, %s" num_of_args) in
     let last_arg_pointer_to_r12 = print_lst ["lea r12, FIRST_ARG_ON_STACK"; (num_args_stack_in_bites_to_r10); "add r12, r10"] in
     
     let shrink_extra_args_to_lst_in_rax = 
@@ -240,7 +245,7 @@ module Code_Gen : CODE_GEN = struct
           "; invariant: after calling rax holding the new args pairs list";
           (last_arg_pointer_to_r12);
             "mov r9, SOB_NIL_ADDRESS           ; we want to build an proper list, so the last val is NIL"; 
-            (args_diff_to_ecx);
+            (args_diff_to_rcx);
             print "adjust_loop%d: \n cmp rcx, 0" id;
             print "je shrink_stack_end%d" id;
             "mov r8, [rbx]";
@@ -252,8 +257,8 @@ module Code_Gen : CODE_GEN = struct
 
     let enlarge_frame_and_finish_if_nedded =
         print_lst 
-          [ (args_diff_to_ecx);
-            "cmp ecx, 0                       ; we don't using opt args -> magic cell get an empty list";
+          [ (args_diff_to_rcx);
+            "cmp rcx, 0                       ; we don't using opt args -> magic cell get an empty list";
             print "jne continue_adjust_stack%d" id;
             "mov r13, SOB_NIL_ADDRESS         ;"  ;
             (last_arg_pointer_to_r12);
@@ -273,19 +278,19 @@ module Code_Gen : CODE_GEN = struct
       print_lst 
       [";generate  shrink_frame";
         (last_arg_pointer_to_r12);
-        "mov qword [r12], eax                 ; set the last arg to be the pair list of optional args";
+        "mov qword [r12], rax                 ; set the last arg to be the pair list of optional args";
         "sub r12, WORD_SIZE                   ; this is now the last free cell for shrinking ";                  
-        "mov ebx, ebp                         ; get the first element from stack to shrink";
-        (args_diff_to_ecx);
+        "mov rbx, rbp                         ; get the first element from stack to shrink";
+        (args_diff_to_rcx);
         (print "shrink_frame%d:" id);
-        "cmp ecx, 0";
+        "cmp rcx, 0";
         (print "je adjust_stack_end%d" id);
-        "mov r10, [ebx]                       ; r10 <- current value to move up";
+        "mov r10, [rbx]                       ; r10 <- current value to move up";
         "mov qword [r12], r10                 ; r12 holds the last free cell foor shrink";
         "sub r12, WORD_SIZE";
         "add rbx, WORD_SIZE                   ; go the the next element for shrinking";
         "add rbp, WORD_SIZE                   ; delete old element from stack";
-        "dec ecx";
+        "dec rcx";
         (print "jmp shrink_frame%d" id);
         ] in
    
@@ -298,7 +303,7 @@ module Code_Gen : CODE_GEN = struct
           print "continue_adjust_stack%d:" id;
           (update_num_of_args_in_stack);
           (shrink_frame);
-          (print "adjust_stack_end%d" id);
+          (print "adjust_stack_end%d:" id);
           ] 
 
    
@@ -328,8 +333,54 @@ module Code_Gen : CODE_GEN = struct
       print "Lcont%d:"  id ;
       (* RETURN VALUE????*)
      ]
-
   
+  
+  
+  and finish_applic_not_TP = 
+    print_lst 
+    [";generate  finish_applic_not_TP";
+      "add rsp, WORD_SIZE             ; pop env";
+      "pop rbx                        ; pop arg count";
+      "add rbx, 1                     ; adding one for the magic cell";
+      "shl rbx, 3";
+      "add rsp, rbx                   ; pop args";
+      (* RETURN VALUE????*)
+
+    ]
+  
+ and finish_applic_TP = 
+    let fix_the_stack = "" in
+
+    print_lst 
+    [";generate  finish_applic_TP";
+      "push qword [rbp+ WORD_SIZE]    ; old  ret addr";
+      (fix_the_stack);
+      "jmp rax                        ; code";
+      (* RETURN VALUE????*)
+
+    ]
+
+
+  and applic_writer consts fvars env_num first sexprs is_TP =
+      let id = next_lable_id() in 
+      let args_gen =  List.map (fun e -> (generate_rec consts fvars e env_num)) (List.rev sexprs) in
+      let args_code = (if sexprs = [] then "" else (String.concat "\npush rax\n" args_gen)^"\npush rax\n" ) in
+      let proc_code = (generate_rec consts fvars first env_num) in
+      let finish_applic_case =  (if is_TP = true then finish_applic_TP else finish_applic_not_TP) in
+
+      print_lst 
+        [";generate  applic_writer";
+          (args_code);
+          print "push %d" (List.length sexprs);
+          (proc_code);
+          "mov bl,byte [rax]";
+          "cmp bl ,T_CLOSURE";
+          "jne rax_isnt_closure";
+          "push rax                 ; push env";
+          (finish_applic_case);
+        ]
+
+       
   let make_consts_tbl asts =
     let consts_tbl_init = 
       [ (Void, (next_const_offset 1, "MAKE_VOID")); 
@@ -362,7 +413,6 @@ module Code_Gen : CODE_GEN = struct
         (List.fold_left (fun tbl e -> get_tbl e tbl fvar_tbl_adder) primitive_fvar_table asts);; 
   
   
-  
-        let generate consts fvars e = "raise X_not_yet_implemented";;
+        let generate consts fvars e =  (generate_rec consts fvars e 0);;
 end;;
 

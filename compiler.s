@@ -150,6 +150,15 @@
 %define MAKE_NIL db T_NIL
 %define MAKE_VOID db T_VOID
 
+
+%macro MAKE_LITERAL_STRING 1
+db T_STRING
+dq (%%end_str - %%str)
+%%str:
+db %1
+%%end_str:
+%endmacro
+
 ;;; Macros and routines for printing Scheme OBjects to STDOUT
 %define CHAR_NUL 0
 %define CHAR_TAB 9
@@ -316,6 +325,10 @@ section .data
 .regular:
 	db "#\%c", 0
 
+args_error:
+	db "Illegal number of args", 10, 0
+closure_error:
+	db "Illegal number of args", 10, 0
 
 illegal_args_count:
 	push rbp
@@ -323,6 +336,17 @@ illegal_args_count:
 
 	mov rax, 0
 	mov rdi, args_error
+	call printf
+
+	pop rbp
+	ret
+
+rax_isnt_closure:
+	push rbp
+	mov rbp, rsp
+
+	mov rax, 0
+	mov rdi, closure_error
 	call printf
 
 	pop rbp
@@ -342,8 +366,6 @@ write_sob_void:
 section .data
 .void:
 	db "#<void>", 0
-.args_error:
-	db "Illegal number of args", 10, 0
 	
 write_sob_bool:
 	push rbp
