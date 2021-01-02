@@ -102,7 +102,7 @@ module Code_Gen : CODE_GEN = struct
     let generate_rec_call e =  generate_rec consts fvars e env_num in
     match e with
     | Const'(c) -> print "mov rax, [const_tbl+%s] ; generate Const'(c)" (idx_as_str c consts)
-    | Var'(VarFree (v)) -> print "mov rax, qword [fvar_tbl+ WORD_SIZE * %s] ; generate Var'(VarFree (v))" (idx_as_str_fvars v fvars)
+    | Var'(VarFree (v)) -> print "mov rax, qword [fvar_tbl+ %s] ; generate Var'(VarFree (v))" (idx_as_str_fvars v fvars)
     | Var'(VarParam (v,mn)) -> print "mov rax, qword [rbp+ WORD_SIZE * (4 + %d)] ; generate Var'(VarParam (v,mn))" mn
     | Var'(VarBound (v,major,minor)) -> 
           print_lst 
@@ -116,7 +116,7 @@ module Code_Gen : CODE_GEN = struct
           print_lst 
             [ "; generate Set'(Var'(VarFree (v)), e)";
               print " %s \n" (generate_rec_call e) ;
-              print " mov qword [%s], rax" (idx_as_str_fvars v fvars);
+              print " mov qword [fvar_tbl+ %s], rax" (idx_as_str_fvars v fvars);
               print " mov rax, SOB_VOID_ADDRESS";]
 
 
