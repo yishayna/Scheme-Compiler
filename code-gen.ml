@@ -39,7 +39,7 @@ module Code_Gen : CODE_GEN = struct
 
   let fvar_offset = ref 0 ;;
   let fvar_next_offset()= let v = !fvar_offset in
-    (fvar_offset:= v+1 ; v);;
+    (fvar_offset:= (v+8) ; v);;
 
   let lable_id = ref 0 ;;
   let next_lable_id() = let v= !lable_id in
@@ -49,9 +49,7 @@ module Code_Gen : CODE_GEN = struct
     match e with
     | Const'(s)-> (adder e tbl)
     | Var'(v) -> (adder e tbl)
-    | Box'(v) -> (adder (Var' v) tbl)
-    | BoxGet'(v) -> (adder (Var' v) tbl)
-    | BoxSet'(v,e) -> get_all_tbl [ (Var' v); e] tbl adder  
+    | BoxSet'(_,e) -> get_tbl e tbl adder  
     | If'(test, dit, dif)-> get_all_tbl [test; dit; dif] tbl adder  
     | (Seq'(l) | Or'(l)) ->  get_all_tbl l tbl adder 
     | (Set'(v, e) | Def'(v, e)) -> get_all_tbl [(Var' v);e] tbl adder 
@@ -101,8 +99,8 @@ module Code_Gen : CODE_GEN = struct
   let rec generate_rec consts fvars e env_num =
     let generate_rec_call e =  generate_rec consts fvars e env_num in
     match e with
-    | Const'(c) -> print "mov rax, [const_tbl+%s] ; generate Const'(c)" (idx_as_str c consts)
-    | Var'(VarFree (v)) -> print "mov rax, qword [fvar_tbl+ %s] ; generate Var'(VarFree (v))" (idx_as_str_fvars v fvars)
+    | Const'(c) -> print "mov rax, const_tbl+%s ; generate Const'(c)" (idx_as_str c consts)
+    | Var'(VarFree (v)) -> print "mov rax, qword [(fvar_tbl+ %s) ]; generate Var'(VarFree (v))" (idx_as_str_fvars v fvars)
     | Var'(VarParam (v,mn)) -> print "mov rax, qword [rbp+ WORD_SIZE * (4 + %d)] ; generate Var'(VarParam (v,mn))" mn
     | Var'(VarBound (v,major,minor)) -> 
           print_lst 
@@ -114,7 +112,7 @@ module Code_Gen : CODE_GEN = struct
     
     | (Set'(VarFree (v), e) | Def'(VarFree (v), e)) ->
           print_lst 
-            [ "; generate Set'(Var'(VarFree (v)), e)";
+            [ "; generate Def/Set'(Var'(VarFree (v)), e)";
               print " %s \n" (generate_rec_call e) ;
               print " mov qword [fvar_tbl+ %s], rax" (idx_as_str_fvars v fvars);
               print " mov rax, SOB_VOID_ADDRESS";]
@@ -241,7 +239,7 @@ module Code_Gen : CODE_GEN = struct
     
     let shrink_extra_args_to_lst_in_rax = 
         print_lst 
-          [";generate  adjust_stack";
+          ["; generate  adjust_stack";
           "; invariant: after calling rax holding the new args pairs list";
           (last_arg_pointer_to_r12);
             "mov r9, SOB_NIL_ADDRESS           ; we want to build an proper list, so the last val is NIL"; 
@@ -317,7 +315,7 @@ module Code_Gen : CODE_GEN = struct
     let body_code =  (generate_rec consts fvars body (env_num + 1)) in
 
     print_lst 
-    [";generate  lambda_writer";
+    ["; generate  lambda_writer";
       ext_env_to_rbx;
       print "MAKE_CLOSURE(rax,rbx, Lcode%d)" id ;
       print " jmp Lcont%d "  id ;
@@ -338,7 +336,9 @@ module Code_Gen : CODE_GEN = struct
   
   and finish_applic_not_TP = 
     print_lst 
-    [";generate  finish_applic_not_TP";
+    ["; generate  finish_applic_not_TP";
+      "CLOSURE_CODE rsi, rax";
+      "call rsi                       ; call code";      
       "add rsp, WORD_SIZE             ; pop env";
       "pop rbx                        ; pop arg count";
       "add rbx, 1                     ; adding one for the magic cell";
@@ -352,7 +352,7 @@ module Code_Gen : CODE_GEN = struct
     let fix_the_stack = "" in
 
     print_lst 
-    [";generate  finish_applic_TP";
+    ["; generate  finish_applic_TP";
       "push qword [rbp+ WORD_SIZE]    ; old  ret addr";
       (fix_the_stack);
       "jmp rax                        ; code";
@@ -370,17 +370,22 @@ module Code_Gen : CODE_GEN = struct
 
       print_lst 
         [";generate  applic_writer";
+        "push SOB_NIL_ADDRESS";
+
           (args_code);
-          print "push %d" (List.length sexprs);
+          print "mov r8, %d" (List.length sexprs);
+          "push r8" ;
           (proc_code);
           "mov bl,byte [rax]";
           "cmp bl ,T_CLOSURE";
           "jne rax_isnt_closure";
-          "push rax                 ; push env";
+
+          "CLOSURE_ENV rsi, rax";
+          "push rsi                 ; push env";
           (finish_applic_case);
         ]
 
-       
+         
   let make_consts_tbl asts =
     let consts_tbl_init = 
       [ (Void, (next_const_offset 1, "MAKE_VOID")); 
