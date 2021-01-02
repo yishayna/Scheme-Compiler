@@ -310,6 +310,92 @@ module Prims : PRIMS = struct
 
   (* ----------need to implement apply_as------------- *)
   let pair_ops = 
+    and improper_list_address =
+     "mov rdi, NUM_OF_ARGS            ; get num of args = proc, n of proc, s
+      sub rdi, 2                      ; num of args without improper list = num_0f_args -1(proc)-1(s of improper list)
+      push rdi                        ; save num of args without list
+      lea rbx, [rbp+WORD_SIZE(5+rdi)] ; get address of improper list
+      mov rsi, [rbx]                  ; content of improper list
+      " 
+    (*--- rbx will contain the address of the improper list ---*)
+    
+    and is_empty_improper_list = 
+     " mov rax, SOB_NIL_ADDRESS       ; rax will contain the reverted list / empty list if empty
+       push SOB_NIL_ADDRESS           ; for magic
+       cmp qword rsi, SOB_NIL_ADDRESS ; check if input improper list is empty
+       je .optional_args
+      "
+    
+    and revert_improper_list = 
+     "; rcx = counter for improper list length
+      ; create reverted improper list from input proper list
+      mov rcx, 0                                
+      mov r10 , SOB_NIL_ADDRESS
+      .loop:
+        cmp qword rsi, SOB_NIL_ADDRESS  ; while improper list isnt empty
+        je .end_loop                    ; if empty jump to end loop
+        CAR rdi, rsi                    ; car of input proper list
+        CDR r9, rsi                     ; cdr of input proper list
+        mov rsi, r9                     ; rsi contains the next pair
+        MAKE_PAIR (rax, rdi, r10)       ; make pair for the reverted list
+        mov r10, rax                    ; r10 contains the new reverted list
+        inc rcx                         ; add proper list counter                
+        jump .loop
+      .end_loop:
+      mov rax, r10                      ; rax will contain the reverted list / empty list if empty 
+      "
+
+    and push_improper_list = 
+     "; push improper list elements in the correct order
+      push SOB_NIL_ADDRESS              ; for magic
+      .push_element:
+        cmp qword rax, SOB_NIL_ADDRESS  ; while improper list isnt empty
+        je .end_push_element            ; if empty jump to end loop
+        CAR rdi, rax                    ; car of input proper list
+        push rdi                        ; push element to stack in the correct order
+        CDR rdi, rax                    ; cdr of proper list
+        mov rax, rdi                    ; rax contains the next pair
+        jump .push_element              
+      .end_push_element:
+      mov rax, r10                      ; rax will contain the reverted list / empty list if empty 
+      "
+
+    and is_optional_args =
+     "; check if optional args exits, if not stack is ready with args.
+      .optional_args:
+        mov rdi, NUM_OF_ARGS            ; get num of args = proc, n of proc, s
+        sub rdi, 2                      ; 
+        cmp rdi, 0                      ; rdi will contain the number of optional args
+        je .args_ready_on_stack   
+      "
+
+    and push_optional_args = 
+     "; optional args exist and should be pushed to stack
+      mov rax, rbx            ; move to rax the address of the improper list
+      sub rax, WORD_SIZE      ; sub 8 to get the address of the last optional arg
+      .push_optional_args:
+        cmp rdi,0
+        jmp .end_push_optional_args
+        push qword [rax]
+        sub rax, WORD_SIZE
+        dec rdi
+        jmp .push_optional_args
+    "
+
+    and push_all_args_number = 
+     "; push the number of all args ( optional and list elements)
+      mov rdi, NUM_OF_ARGS            ; get num of args = proc, n of proc, s
+      sub rdi, 2                      ; get only the num of optional args
+      add rdi rcx                     ; add to the length of improper list the optional args number
+      push rdi                        ; push all args number 
+    "
+
+    and apply_as =
+      "
+       "
+
+
+
     let pair_list = [
         "CAR rax, rax", make_unary, "car_as";
 
@@ -323,6 +409,8 @@ module Prims : PRIMS = struct
         
         "mov [rsi +1 + 8 ], rdi
          mov rax, SOB_VOID_ADDRESS", make_binary , "set_cdr_as"; 
+
+         "", make_routine, "apply_as";
     ] in 
     String.concat "\n\n" (List.map (fun (a, b, c) -> (b c a)) pair_list);;
 

@@ -1,4 +1,4 @@
-(define map
+(*(define map
   (let ((null? null?)
 	(car car) (cdr cdr)
 	(cons cons) (apply apply))
@@ -209,3 +209,5 @@
 		 ((and (string? x) (string? y)) (equal?-loop (string->list x) (string->list y)))
 		 (else (eq? x y))))))
     equal?-loop)))
+
+*)
