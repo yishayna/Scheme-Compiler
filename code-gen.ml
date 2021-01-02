@@ -152,7 +152,7 @@ module Code_Gen : CODE_GEN = struct
               "cmp rax, SOB_FALSE_ADDRESS";
               print "je Lelse%d " id ;
               (generate_rec_call dit);
-               print "je Lexit%d\nLelse%d:" id id;
+               print "jmp Lexit%d\nLelse%d:" id id;
               (generate_rec_call dif);
               print "Lexit%d:" id;]
 
@@ -329,7 +329,6 @@ module Code_Gen : CODE_GEN = struct
       "leave";
       "ret";
       print "Lcont%d:"  id ;
-      (* RETURN VALUE????*)
      ]
   
   
@@ -344,20 +343,43 @@ module Code_Gen : CODE_GEN = struct
       "add rbx, 1                     ; adding one for the magic cell";
       "shl rbx, 3";
       "add rsp, rbx                   ; pop args";
-      (* RETURN VALUE????*)
-
     ]
   
- and finish_applic_TP = 
-    let fix_the_stack = "" in
+    and finish_applic_TP curr_stackframe_size id = 
+        let fix_the_stack =  
+          print_lst 
+          (*go over curr stack and move each value to the old stack address*)
+          (*loop over the number of curr stack vars and copy each one*)
+          (*the copy order is from upper to lower*)
+          [";shift frame for tp call";
+          "push rax";
+          "mov rdx, NUM_OF_ARGS   ; number of old args";
+          "add rdx, 5             ; old_stackframe_size";
+          "mov rax,rdx            ; save in rdx oldstack size for rsp addition";  
+          print "mov rbx, %d      ; curr_stackframe_size" curr_stackframe_size ; 
+          "mov rcx, 1             ; initialize copy counter";
+          print "copy_loop%d:" id;
+          "cmp rbx , 0";
+          print "je finish_loop%d" id ; 
+          "dec rax";
+          "mov r9,rcx\nneg r9";
+          "mov r8, qword[rbp + WORD_SIZE*r9] ; copy curr stack value"; 
+          "mov [rbp + WORD_SIZE*rax], r8    ; mov curr stack value over old space"; 
+          "inc rcx";
+          "dec rbx";
+          print "jmp copy_loop%d" id;
+          print "finish_loop%d:" id;
+          "shl rdx, 3                       ; old stacksize * qword size";
+          "pop rax";
+          "add rsp, rdx                     ; move rsp to point to new moved stack";
+          ] in       
 
     print_lst 
     ["; generate  finish_applic_TP";
       "push qword [rbp+ WORD_SIZE]    ; old  ret addr";
       (fix_the_stack);
+      "CLOSURE_CODE rax, rax";
       "jmp rax                        ; code";
-      (* RETURN VALUE????*)
-
     ]
 
 
@@ -366,15 +388,17 @@ module Code_Gen : CODE_GEN = struct
       let args_gen =  List.map (fun e -> (generate_rec consts fvars e env_num)) (List.rev sexprs) in
       let args_code = (if sexprs = [] then "" else (String.concat "\npush rax\n" args_gen)^"\npush rax\n" ) in
       let proc_code = (generate_rec consts fvars first env_num) in
-      let finish_applic_case =  (if is_TP = true then finish_applic_TP else finish_applic_not_TP) in
+      let curr_stackframe_size = (List.length sexprs) + 4 in
+      let finish_applic_case =  (if is_TP = true then (finish_applic_TP curr_stackframe_size id) else finish_applic_not_TP) in
+
+      
 
       print_lst 
         [";generate  applic_writer";
         "push SOB_NIL_ADDRESS";
 
           (args_code);
-          print "mov r8, %d" (List.length sexprs);
-          "push r8" ;
+          print "push qword %d" (List.length sexprs);
           (proc_code);
           "mov bl,byte [rax]";
           "cmp bl ,T_CLOSURE";
