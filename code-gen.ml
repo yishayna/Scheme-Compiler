@@ -182,34 +182,26 @@ module Code_Gen : CODE_GEN = struct
     let copy_minors = print_lst
                         [ "; generate - make_ext_env - copy_minors";
                           "; invariant: rbx hold EXT_ENV[0]";
-                          "push rbx                     ; backup rbx";
                           "mov rax, LAST_ENV";
                           "mov rcx, 0                   ; i = 0 ";
-                          "mov rdx, WORD_SIZE";
-                          "add rdx, rbx                 ; rdx = ExtEnv[j], j = 1";
                           print "copy_minors%d:" id ;
-                          "mov r8, rcx                  ; load the index (in bites) to r8" ;
-                          "add r8, rax                  ; set r8 to point to the specific source cell ENV[i]  (i=j-1)";
-                          "mov r8, [r8]                 ; copy the content of ENV[i] to r8";
-                          "mov [rdx], r8                ; set the content of EXT_ENV[j] to the content of ENV[i]";
-                          "add rdx, WORD_SIZE           ; prepare rdx to the next loop" ;           
+                          print "cmp rcx, WORD_SIZE*%d  ; while i<|ENV|" env_num;
+                          print "jge copy_minors_end%d" id ;
+                          "mov r8, [rax + rcx]          ; copy the content of ENV[i] to r8";
+                          "mov [rbx + rcx + WORD_SIZE], r8      ; set the content of EXT_ENV[i+1] to be the content of ENV[i]";
                           "add rcx, WORD_SIZE           ; prepare rcx to the next loop" ;           
-                          print "cmp rcx, WORD_SIZE*%d            ; while i<|ENV|" env_num;
-                          print "jne copy_minors%d" id ;
-                          "pop rbx                      ; load rbx from backup ";] in
+                          print "jmp copy_minors%d" id ;
+                          print "copy_minors_end%d:" id ;
+                          ] in
   
     let copy_params = print_lst 
                         [ "; generate - make_ext_env - copy_params";
-                          "; invariant: rbx hold EXT_ENV[0]";
-                          "push rbx                       ; backup rbx";
                           "mov rcx, NUM_OF_ARGS";
                           "inc rcx                        ; reserve one WORD for the magic" ;            
                           "shl rcx, 3";
                           print "MALLOC rax, rcx" ;
-                          "mov [rbx], rax                 ; set EXT_ENV[0] to point on new vector of size WORD_SIZE*(NUM_OF_ARGS+1)";
-                          "mov rax, [rbx]                 ; rax = EXT_ENV[0][0]";
+                          "mov [rbx], rax                ; set EXT_ENV[0] to point on new vector of size WORD_SIZE*(NUM_OF_ARGS+1)"; 
                           "lea rdx, FIRST_ARG_ON_STACK";
-                                                    
                           "mov rcx, 0";
                           print "copy_params%d:" id ;
                           "mov r8, NUM_OF_ARGS";
@@ -219,14 +211,15 @@ module Code_Gen : CODE_GEN = struct
                           "mov [rax + WORD_SIZE*rcx], r8 ; copy EXT_ENV[0][i] = ARGS[i]";
                           "inc rcx";
                           print "jmp copy_params%d" id ;
-                          print "all_params_copied%d:" id;
-                          "pop rbx                        ; load rbx from backup ";] in
+                          print "all_params_copied%d:" id;] in
 
       print_lst 
         [";generate  make_ext_env";
           print "MALLOC rbx, WORD_SIZE*%d" (env_num + 1);
+          "push rbx";
           (copy_params);
           (copy_minors);
+          "pop rbx";
         ]
 
 
@@ -395,8 +388,7 @@ module Code_Gen : CODE_GEN = struct
 
       print_lst 
         [";generate  applic_writer";
-        "push SOB_NIL_ADDRESS";
-
+        "push qword SOB_NIL_ADDRESS";
           (args_code);
           print "push qword %d" (List.length sexprs);
           (proc_code);
