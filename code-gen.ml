@@ -141,7 +141,7 @@ module Code_Gen : CODE_GEN = struct
     | Or'(l)-> let id = next_lable_id() in 
           print_lst 
             [ "; generate  Or'(l)";
-              print_lst (List.map (fun e -> (print "%s\n mov rax, SOB_FALSE_ADDRESS \n jne Lexit%d" (generate_rec_call e) id )) l) ;
+              print_lst (List.map (fun e -> (print "%s\n cmp rax, SOB_FALSE_ADDRESS \n jne Lexit%d" (generate_rec_call e) id )) l) ;
               print "Lexit%d:" id]
 
     
