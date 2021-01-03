@@ -308,12 +308,153 @@ module Prims : PRIMS = struct
       ] in
     String.concat "\n\n" (List.map (fun (a, b, c) -> (b c a)) misc_parts);;
 
-  (* ----------need to implement apply_as------------- *)
+(* ----------need to implement apply_as------------- *)
+  let apply_as = 
+    let apply_start = 
+    "apply_as:
+      push rbp
+      mov rbp, rsp
+      push SOB_NIL_ADDRESS            ; save for magic
+      " in
+
+    let improper_list_address =
+     "mov rdi, NUM_OF_ARGS            ; get num of args = proc, n of proc, s
+      sub rdi, 2                      ; num of args without improper list = num_0f_args -1(proc)-1(s of improper list)
+      lea rbx, [rbp+WORD_SIZE*(5+rdi)] ; get address of improper list
+      mov rsi, [rbx]                  ; content of improper list
+      " in
+    (*--- rbx will contain the address of the improper list ---*)
+    
+    let is_empty_improper_list = 
+     " mov rax, SOB_NIL_ADDRESS       ; rax will contain the reverted list / empty list if empty
+       cmp qword rsi, SOB_NIL_ADDRESS ; check if input improper list is empty
+       je .optional_args
+      " in
+    
+    let revert_improper_list = 
+     "; rcx = counter for improper list length
+      ; create reverted improper list from input proper list
+      mov rcx, 0                                
+      mov r10 , SOB_NIL_ADDRESS
+      .revert_loop:
+        cmp qword rsi, SOB_NIL_ADDRESS  ; while improper list isnt empty
+        je .end_revert_loop             ; if empty jump to end loop
+        CAR rdi, rsi                    ; car of input proper list
+        CDR r9, rsi                     ; cdr of input proper list
+        mov rsi, r9                     ; rsi contains the next pair
+        MAKE_PAIR (rax, rdi, r10)       ; make pair for the reverted list
+        mov r10, rax                    ; r10 contains the new reverted list
+        inc rcx                         ; add proper list counter                
+        jmp .revert_loop
+      .end_revert_loop:
+      mov rax, r10                      ; rax will contain the reverted list / empty list if empty 
+      " in
+
+    let push_improper_list = 
+     "; push improper list elements in the correct order
+      .push_element:
+        cmp qword rax, SOB_NIL_ADDRESS  ; while improper list isnt empty
+        je .end_push_element            ; if empty jump to end loop
+        CAR rdi, rax                    ; car of input proper list
+        push rdi                        ; push element to stack in the correct order
+        CDR rdi, rax                    ; cdr of proper list
+        mov rax, rdi                    ; rax contains the next pair
+        jmp .push_element              
+      .end_push_element:
+      mov rax, r10                      ; rax will contain the reverted list / empty list if empty 
+      " in
+
+    let is_optional_args =
+     "; check if optional args exits, if not stack is ready with args.
+      .optional_args:
+        mov rdi, NUM_OF_ARGS            ; get num of args = proc, n of proc, s
+        sub rdi, 2                      ; 
+        cmp rdi, 0                      ; rdi will contain the number of optional args
+        je .args_ready_on_stack   
+      " in
+
+    let push_optional_args = 
+     "; optional args exist and should be pushed to stack
+      mov rax, rbx            ; move to rax the address of the improper list
+      sub rax, WORD_SIZE      ; sub 8 to get the address of the last optional arg
+      .push_optional_args:
+        cmp rdi,0
+        jmp .end_push_optional_args
+        push qword [rax]
+        sub rax, WORD_SIZE
+        dec rdi
+        jmp .push_optional_args
+      .end_push_optional_args:
+    " in
+
+    let push_all_args_number = 
+     "; push the number of all args ( optional and list elements)
+      .args_ready_on_stack:
+      mov rdi, NUM_OF_ARGS            ; get num of args = proc, n of proc, s
+      sub rdi, 2                      ; get only the num of optional args
+      add rdi, rcx                     ; add to the length of improper list the optional args number
+      .push_all_args:
+      push rdi                        ; push all args number 
+    " in
+    
+    let push_prepartions_apply = 
+      "
+      mov r12, PVAR(0)               ; mov rdi the proc
+      .get_closure_env1:
+      CLOSURE_ENV rsi, r12             ; get env of proc
+      push rsi                          ; push env 
+      .get_closure_env2:
+      mov rdi, [rbp+8]                  ; get ret address
+      push qword[rdi]                   ; push ret address
+      push qword[rbp]                   ; push rbp
+      " in 
+
+    let apply_closure = 
+     "; shift the frame for apply in tail position
+      push rax
+      .start_apply_proc:
+      mov rdx, NUM_OF_ARGS   ; number of old args
+      add rdx, 5             ; old_stackframe_size
+      mov rax,rdx            ; save in rdx oldstack size for rsp addition  
+      add rcx, 5             ; rcx has the number of all args +5 for current stack size
+      mov rbx, rcx           ; curr_stackframe_size 
+      .before_loop:
+      mov rcx, 1             ; initialize copy counter
+      .copy_loop:
+      cmp rbx , 0
+      je .finish_loop
+      dec rax
+      .in_loop:
+      mov r9,rcx
+      neg r9
+      .before_move:
+      mov r8, qword[rbp + WORD_SIZE*r9] ; copy curr stack value 
+      mov [rbp + WORD_SIZE*rax], r8    ; mov curr stack value over old space
+      inc rcx
+      dec rbx
+      jmp .copy_loop
+      .finish_loop:
+      shl rdx, 3                       ; old stacksize * qword size
+      .test1:
+      pop rax
+      add rsp, rdx                     ; move rsp to point to new moved stack
+      .test2:
+      CLOSURE_CODE rsi, r12            ; get the code of the closure
+      .before_jmp:
+      pop rbp
+      jmp rsi
+    " in
+    let apply_flow_list = [apply_start ;improper_list_address; is_empty_improper_list;
+              revert_improper_list; push_improper_list; is_optional_args;
+              push_optional_args; push_all_args_number; push_prepartions_apply; apply_closure] in
+  
+    String.concat "\n\n" (List.map (fun (a) -> (a)) apply_flow_list) ;;
+
   let pair_ops = 
     let pair_list = [
-        "CAR rax, rax", make_unary, "car_as";
+        "CAR rax, rsi", make_unary, "car_as";
 
-        "CDR rax, rax" , make_unary, "cdr_as";
+        "CDR rax, rsi" , make_unary, "cdr_as";
 
         "MAKE_PAIR (rax, rsi, rdi)" , make_binary , "cons_as" ; 
 
@@ -329,5 +470,5 @@ module Prims : PRIMS = struct
   (* This is the interface of the module. It constructs a large x86 64-bit string using the routines
      defined above. The main compiler pipline code (in compiler.ml) calls into this module to get the
      string of primitive procedures. *)
-  let procs = String.concat "\n\n" [type_queries ; numeric_ops; misc_ops ;pair_ops];;
+  let procs = String.concat "\n\n" [type_queries ; numeric_ops; misc_ops ;pair_ops; apply_as];;
 end;;

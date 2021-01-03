@@ -91,7 +91,9 @@ main:
     ;; (which a is a macro for 0) so that returning
     ;; from the top level (which SHOULD NOT HAPPEN
     ;; AND IS A BUG) will cause a segfault.
-    push 0                ; argument count
+    
+    push qword SOB_NIL_ADDRESS ; magic
+    push qword 0                ; argument count
     push SOB_NIL_ADDRESS  ; lexical environment address
     push T_UNDEFINED      ; return address
     push rbp                    
@@ -115,7 +117,7 @@ let clean_exit =
   ";;; Clean up the dummy frame, set the exit status to 0 (\"success\"), 
    ;;; and return from main
    pop rbp
-   add rsp, 3*8
+   add rsp, 4*8
    mov rax, 0
 
    ret";;
