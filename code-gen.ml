@@ -315,7 +315,6 @@ module Code_Gen : CODE_GEN = struct
       print "Lcode%d:" id ;
       "push rbp";
       "mov rbp, rsp";
-      "lambda_yana_test:";
       print "cmp qword NUM_OF_ARGS, %s" num_of_args;
       jump_error_if_illegal_args_count;
       adjust_stack_if_needed;
@@ -332,7 +331,6 @@ module Code_Gen : CODE_GEN = struct
     ["; generate  finish_applic_not_TP";
       "CLOSURE_CODE rsi, rax";
       "call rsi                       ; call code";      
-      "test_yana:";
       "add rsp, WORD_SIZE             ; pop env";
       "pop rbx                        ; pop arg count";
       "add rbx, 1                     ; adding one for the magic cell";
@@ -359,7 +357,6 @@ module Code_Gen : CODE_GEN = struct
           "dec rax";
           "mov r9,rcx";
           "neg r9";
-          "mov_stackframe:";
           "mov r8, qword[rbp + WORD_SIZE*r9] ; copy curr stack value"; 
           "mov [rbp + WORD_SIZE*rax], r8    ; mov curr stack value over old space"; 
           "inc rcx";
