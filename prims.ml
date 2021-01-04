@@ -376,12 +376,11 @@ module Prims : PRIMS = struct
     let push_optional_args = 
      "; optional args exist and should be pushed to stack
       mov rax, rbx            ; move to rax the address of the improper list
-      sub rax, WORD_SIZE      ; sub 8 to get the address of the last optional arg
       .push_optional_args:
         cmp rdi,0
-        jmp .end_push_optional_args
+        je .end_push_optional_args
+        sub rax, WORD_SIZE      ; sub 8 to get the address of the last optional arg
         push qword [rax]
-        sub rax, WORD_SIZE
         dec rdi
         jmp .push_optional_args
       .end_push_optional_args:
@@ -391,32 +390,32 @@ module Prims : PRIMS = struct
      "; push the number of all args ( optional and list elements)
       .args_ready_on_stack:
       mov rdi, NUM_OF_ARGS            ; get num of args = proc, n of proc, s
+      .before_all_args:
       sub rdi, 2                      ; get only the num of optional args
-      add rdi, rcx                     ; add to the length of improper list the optional args number
+      add rdi, rcx                    ; add to the length of improper list the optional args number
       .push_all_args:
       push rdi                        ; push all args number 
+      mov rcx ,rdi                    ; rcx holds all args
     " in
     
     let push_prepartions_apply = 
       "
       mov r12, PVAR(0)               ; mov rdi the proc
       .get_closure_env1:
-      CLOSURE_ENV rsi, r12             ; get env of proc
-      push rsi                          ; push env 
+      CLOSURE_ENV rsi, r12           ; get env of proc
+      push rsi                       ; push env 
       .get_closure_env2:
-      mov rdi, [rbp+8]                  ; get ret address
-      push qword[rdi]                   ; push ret address
-      push qword[rbp]                   ; push rbp
+      push qword[rbp + 8]            ; push ret address
       " in 
 
     let apply_closure = 
      "; shift the frame for apply in tail position
-      push rax
+      push qword[rbp]                   ; push rbp
       .start_apply_proc:
       mov rdx, NUM_OF_ARGS   ; number of old args
       add rdx, 5             ; old_stackframe_size
       mov rax,rdx            ; save in rdx oldstack size for rsp addition  
-      add rcx, 5             ; rcx has the number of all args +5 for current stack size
+      add rcx, 4             ; rcx has the number of all args +4 for current stack size
       mov rbx, rcx           ; curr_stackframe_size 
       .before_loop:
       mov rcx, 1             ; initialize copy counter
@@ -436,7 +435,6 @@ module Prims : PRIMS = struct
       .finish_loop:
       shl rdx, 3                       ; old stacksize * qword size
       .test1:
-      pop rax
       add rsp, rdx                     ; move rsp to point to new moved stack
       .test2:
       CLOSURE_CODE rsi, r12            ; get the code of the closure

@@ -161,14 +161,20 @@ module Code_Gen : CODE_GEN = struct
 
     | BoxSet'(v,e) -> 
         print_lst 
-          [";generate  BoxSet'(v,e)";
+          ["; generate BoxSet'(v,e)";
             (generate_rec_call e);
             "push rax";
             (generate_rec_call (Var'(v)));
             "pop qword [rax]";
             "mov rax, SOB_VOID_ADDRESS";]
 
-    
+    | Box'(v)-> 
+      print_lst  
+          ["; generate Box'(v)";
+            "MALLOC rbx, WORD_SIZE";
+            (generate_rec_call (Var'(v)));
+            "mov [rbx], rax";
+            "mov rax, rbx";]
     | LambdaSimple'(args, body) -> lambda_writer consts fvars env_num args body []
     | LambdaOpt'(args, opt , body) -> lambda_writer consts fvars env_num args body [opt]
     | Applic'(first, sexprs) -> applic_writer consts fvars env_num first sexprs false
@@ -228,25 +234,40 @@ module Code_Gen : CODE_GEN = struct
   and adjust_stack num_of_args id =
     (*Invariant: These "OCAML MACROS" using r10+ registers unless it explicitly mentioned in the name  *)
     let num_args_stack_in_bites_to_r10 = "mov r10, NUM_OF_ARGS \n shl r10, 3" in 
-    let args_diff_to_rcx =  (print "mov rcx, NUM_OF_ARGS \nsub rcx, %s" num_of_args) in
-    let last_arg_pointer_to_r12 = print_lst ["lea r12, FIRST_ARG_ON_STACK"; (num_args_stack_in_bites_to_r10); "add r12, r10"] in
+    let num_of_opt_args =  (print "mov rcx, NUM_OF_ARGS \nsub rcx, %s" num_of_args) in
+    
+    let last_opt_arg_pointer_in_r12 = 
+      print_lst 
+        ["lea r12, FIRST_ARG_ON_STACK";
+         (num_args_stack_in_bites_to_r10);
+         "add r12, r10       ; r12 is the pointer to magic cell";
+        ] in
     
     let shrink_extra_args_to_lst_in_rax = 
         print_lst 
           ["; generate  adjust_stack";
           "; invariant: after calling rax holding the new args pairs list";
-          (last_arg_pointer_to_r12);
+          (last_opt_arg_pointer_in_r12);
             "mov r9, SOB_NIL_ADDRESS           ; we want to build an proper list, so the last val is NIL"; 
-            (args_diff_to_rcx);
+            (num_of_opt_args);
             print "adjust_loop%d: \n cmp rcx, 0" id;
             print "je shrink_stack_end%d" id;
-            "mov r8, [rbx]";
+            print "in_adjust_loop1%d:" id;
+            "sub r12, WORD_SIZE                 ; decrease r12 to point on the previos element for the next loop";
+            "mov r13, [r12]";
+            print "in_adjust_loop2%d:" id;
+            "mov r8, [r12]";
+            print "in_adjust_loop3%d:" id;
             "MAKE_PAIR(rax,r8,r9)               ; rax = pointer to the new pair, r8 = car, r9 = cdr";
             "mov r9, rax                        ; to make the list we need to add this list to be the cdr in the next loop";
-            "sub r12, WORD_SIZE                 ; decrease r12 to point on the previos element for the next loop";
             print "dec rcx \n jmp adjust_loop%d" id;
-            print "shrink_stack_end%d:" id;] in
+            print "shrink_stack_end%d:" id;
+            "mov [r12], r9                      ; save into the opt the list";
+            ] in
 
+(* this code is not needed as we use the magic cell*)
+(*--------should be deleted from here----------*)
+(*
     let enlarge_frame_and_finish_if_nedded =
         print_lst 
           [ (args_diff_to_rcx);
@@ -285,17 +306,18 @@ module Code_Gen : CODE_GEN = struct
         "dec rcx";
         (print "jmp shrink_frame%d" id);
         ] in
-   
-   
+   *)
+(*--------should be deleted until here----------*)
+
     print_lst 
         [";generate  adjust_stack";
           (shrink_extra_args_to_lst_in_rax);
-          (enlarge_frame_and_finish_if_nedded);
-
+          (* ------------is not needed - need to delete-------------*)
+     (*   (enlarge_frame_and_finish_if_nedded);
           print "continue_adjust_stack%d:" id;
           (update_num_of_args_in_stack);
           (shrink_frame);
-          (print "adjust_stack_end%d:" id);
+          (print "adjust_stack_end%d:" id);*)
           ] 
 
    
