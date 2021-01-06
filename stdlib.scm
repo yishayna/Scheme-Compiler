@@ -47,11 +47,10 @@
 ;      This is on purpose, so you don't compile the library without completing this implementation by mistake.))
 
 (define cons*
-	(let ((cons cons))
+	(let ((cons cons)(null? null?))
 		(lambda (x . y)
-			(fold-right cons '() (cons x y)))))
+			(fold-right (lambda (acc v) (if (null? v) acc (cons acc v))) '()  (cons x y)))))
 
-	
 ;   #;(Add your implementation here
 ;      Note: The file won't compile like this, beacuase your tag-parser requires define to have a second expression.
 ;      This is on purpose, so you don't compile the library without completing this implementation by mistake.))
