@@ -330,6 +330,7 @@ module Prims : PRIMS = struct
     let is_empty_improper_list = 
      "
       mov rax, SOB_NIL_ADDRESS       ; rax will contain the reverted list / empty list if empty
+      mov rcx, 0                     ; set length of improper list to zero
       cmp qword rsi, SOB_NIL_ADDRESS ; check if input improper list is empty
       je .optional_args
       " in
