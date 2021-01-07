@@ -342,7 +342,9 @@ module Code_Gen : CODE_GEN = struct
     print_lst 
     ["; generate  finish_applic_TP";
       "push qword [rbp+ WORD_SIZE]    ; old  ret addr";
+      "mov r12, qword[rbp]                 ; save rbp for after tp";
       (fix_the_stack);
+      "mov rbp, r12";
       "CLOSURE_CODE rax, rax";
       "jmp rax                        ; code";
     ]
