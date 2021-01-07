@@ -36,8 +36,6 @@ module Code_Gen : CODE_GEN = struct
   let const_offset = ref 0 ;;
   let next_const_offset off = let v = !const_offset in
     (const_offset:= v+off ; v);;
-  let decrease_const_offset off = let v = !const_offset in
-    (const_offset:= (v-off) ; v);;
 
   let fvar_offset = ref 0 ;;
   let fvar_next_offset()= let v = !fvar_offset in
@@ -234,7 +232,6 @@ module Code_Gen : CODE_GEN = struct
 
 
   and adjust_stack num_of_args id =
-    (*Invariant: These "OCAML MACROS" using r10+ registers unless it explicitly mentioned in the name  *)
     let num_args_stack_in_bites_to_r10 = "mov r10, NUM_OF_ARGS \n shl r10, 3" in 
     let num_of_opt_args =  (print "mov rcx, NUM_OF_ARGS \nsub rcx, %s" num_of_args) in
     
@@ -266,60 +263,9 @@ module Code_Gen : CODE_GEN = struct
             print "shrink_stack_end%d:" id;
             "mov [r12], r9                      ; save into the opt the list";
             ] in
-
-(* this code is not needed as we use the magic cell*)
-(*--------should be deleted from here----------*)
-(*
-    let enlarge_frame_and_finish_if_nedded =
-        print_lst 
-          [ (args_diff_to_rcx);
-            "cmp rcx, 0                       ; we don't using opt args -> magic cell get an empty list";
-            print "jne continue_adjust_stack%d" id;
-            "mov r13, SOB_NIL_ADDRESS         ;"  ;
-            (last_arg_pointer_to_r12);
-            "add r12, WORD_SIZE";
-            "mov qword [r12], r13" ;
-            (print "jmp adjust_stack_end%d" id);] in
-      
-    
-    let update_num_of_args_in_stack = 
-        print_lst 
-        [";generate  update_num_of_args_in_stack";
-         print "lea rbx, NUM_OF_ARGS" ;
-         print "mov qword [rbx], %d           ; num of requierd args + 1 for opt" ((int_of_string num_of_args) + 1);
-        ] in
-
-    let shrink_frame =  
-      print_lst 
-      [";generate  shrink_frame";
-        (last_arg_pointer_to_r12);
-        "mov qword [r12], rax                 ; set the last arg to be the pair list of optional args";
-        "sub r12, WORD_SIZE                   ; this is now the last free cell for shrinking ";                  
-        "mov rbx, rbp                         ; get the first element from stack to shrink";
-        (args_diff_to_rcx);
-        (print "shrink_frame%d:" id);
-        "cmp rcx, 0";
-        (print "je adjust_stack_end%d" id);
-        "mov r10, [rbx]                       ; r10 <- current value to move up";
-        "mov qword [r12], r10                 ; r12 holds the last free cell foor shrink";
-        "sub r12, WORD_SIZE";
-        "add rbx, WORD_SIZE                   ; go the the next element for shrinking";
-        "add rbp, WORD_SIZE                   ; delete old element from stack";
-        "dec rcx";
-        (print "jmp shrink_frame%d" id);
-        ] in
-   *)
-(*--------should be deleted until here----------*)
-
     print_lst 
         [";generate  adjust_stack";
           (shrink_extra_args_to_lst_in_rax);
-          (* ------------is not needed - need to delete-------------*)
-     (*   (enlarge_frame_and_finish_if_nedded);
-          print "continue_adjust_stack%d:" id;
-          (update_num_of_args_in_stack);
-          (shrink_frame);
-          (print "adjust_stack_end%d:" id);*)
           ] 
 
    
