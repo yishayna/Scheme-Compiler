@@ -21,7 +21,7 @@
 
 
 (define fold-left
-	(lambda (f lst init)        
+	(lambda (f init lst)        
 		(letrec ((fold (lambda (lst acc)           
 			(if (null? lst) acc
 				(fold  (cdr lst) (f acc (car lst))))))) 
@@ -34,7 +34,7 @@
 ;      This is on purpose, so you don't compile the library without completing this implementation by mistake.))
 
 (define fold-right 
-	(lambda (f init lst)        
+	(lambda (f lst init)        
 		(letrec ((fold (lambda (acc lst)           
 						(if (null? lst) acc
 							(f (car lst) (fold acc (cdr lst)) ))))) 
