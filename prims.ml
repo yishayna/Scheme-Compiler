@@ -176,10 +176,12 @@ module Prims : PRIMS = struct
         return_boolean_eq,
         "NUMERATOR rcx, rsi
 	 NUMERATOR rdx, rdi
+   .test_yana:
 	 cmp rcx, rdx
 	 jne .false
 	 DENOMINATOR rcx, rsi
 	 DENOMINATOR rdx, rdi
+   .test_yana2:
 	 cmp rcx, rdx
          .false:",
         "FLOAT_VAL rsi, rsi
@@ -321,6 +323,7 @@ module Prims : PRIMS = struct
      "
       mov rdi, NUM_OF_ARGS            ; get num of args = proc, n of proc, s
       sub rdi, 2                      ; get num of optional args = num_of_optional= num_in_stack -1(proc)-1(s)
+      .num_of_args:
       lea rbx, [rbp+WORD_SIZE*(5+rdi)]; get address of improper list
       mov rsi, [rbx]                  ; get content of improper list
       " in
@@ -331,7 +334,7 @@ module Prims : PRIMS = struct
      "
       mov rax, SOB_NIL_ADDRESS       ; rax will contain the reverted list / empty list if empty
       mov rcx, 0                     ; set length of improper list to zero
-      cmp qword rsi, SOB_NIL_ADDRESS ; check if input improper list is empty
+      cmp rsi, SOB_NIL_ADDRESS ; check if input improper list is empty
       je .optional_args
       " in
     
@@ -344,6 +347,7 @@ module Prims : PRIMS = struct
       .revert_loop:
         cmp qword rsi, SOB_NIL_ADDRESS  ; while improper list isnt empty
         je .end_revert_loop             ; if empty jump to end loop
+        .in_revert_loop:
         CAR rdi, rsi                    ; car of input proper list
         CDR r9, rsi                     ; cdr of input proper list
         mov rsi, r9                     ; rsi contains the next pair
@@ -361,13 +365,13 @@ module Prims : PRIMS = struct
       .push_element:
         cmp qword rax, SOB_NIL_ADDRESS  ; while improper list isnt empty
         je .end_push_element            ; if empty jump to end loop
+        .in_push_improper_list:
         CAR rdi, rax                    ; car of input proper list
         push rdi                        ; push element to stack in the correct order
         CDR rdi, rax                    ; cdr of proper list
         mov rax, rdi                    ; rax contains the next pair
         jmp .push_element              
       .end_push_element:
-      mov rax, r10                      ; rax will contain the reverted list / empty list if empty 
       " in
 
     let is_optional_args =
@@ -376,6 +380,7 @@ module Prims : PRIMS = struct
       .optional_args:
         mov rdi, NUM_OF_ARGS            ; get num of args of current stack
         sub rdi, 2                      ; get num of optional args
+        .num_optional_args:
         cmp rdi, 0                      ; rdi will contain the number of optional args
         je .args_ready_on_stack   
       " in
@@ -387,6 +392,7 @@ module Prims : PRIMS = struct
       .push_optional_args:
         cmp rdi,0                       ; until all optional args pushed
         je .end_push_optional_args
+        .in_optional_args:
         sub rax, WORD_SIZE              ; sub 8 to get the address of the last optional arg / the prev
         push qword [rax]                ; push the optional arg
         dec rdi   
@@ -403,7 +409,7 @@ module Prims : PRIMS = struct
       sub rdi, 2                      ; get only the num of optional args
       add rdi, rcx                    ; add to the length of improper list the optional args number
       .push_all_args:
-      push rdi                        ; push all args number 
+      push qword rdi                  ; push all args number 
       mov rcx ,rdi                    ; rcx holds all args
       .push_all_args_end:
     " in
@@ -427,7 +433,7 @@ module Prims : PRIMS = struct
       mov rdx, NUM_OF_ARGS          ; number of old args
       add rdx, 5                    ; old_stackframe_size
       mov rax,rdx                   ; save in rdx oldstack size for rsp addition  
-      add rcx, 4                    ; rcx has the number of all args +4 for current stack size
+      add rcx, 5                    ; rcx has the number of all args +4 for current stack size
       mov rbx, rcx                  ; curr_stackframe_size 
       .before_loop:
       mov rcx, 1                    ; initialize copy counter
@@ -445,6 +451,7 @@ module Prims : PRIMS = struct
       dec rbx
       jmp .copy_loop
       .finish_loop:
+      .after_pop_rax:
       shl rdx, 3                       ; old stacksize * qword size
       .test1:
       add rsp, rdx                     ; move rsp to point to new moved stack

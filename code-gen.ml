@@ -300,8 +300,8 @@ module Code_Gen : CODE_GEN = struct
   and finish_applic_not_TP = 
     print_lst 
     ["; generate  finish_applic_not_TP";
-      "CLOSURE_CODE rsi, rax";
-      "call rsi                       ; call code";      
+      "CLOSURE_CODE rax, rax";
+      "call rax                       ; call code";      
       "add rsp, WORD_SIZE             ; pop env";
       "pop rbx                        ; pop arg count";
       "add rbx, 1                     ; adding one for the magic cell";
@@ -341,12 +341,12 @@ module Code_Gen : CODE_GEN = struct
 
     print_lst 
     ["; generate  finish_applic_TP";
-      "push qword [rbp+ WORD_SIZE]    ; old  ret addr";
+      "push qword [rbp+ WORD_SIZE]         ; old  ret addr";
       "mov r12, qword[rbp]                 ; save rbp for after tp";
       (fix_the_stack);
       "mov rbp, r12";
       "CLOSURE_CODE rax, rax";
-      "jmp rax                        ; code";
+      "jmp rax                             ; code";
     ]
 
 
@@ -364,24 +364,30 @@ module Code_Gen : CODE_GEN = struct
         [";generate  applic_writer";
         "push qword SOB_NIL_ADDRESS";
           (args_code);
+          print "before_push_args%d:" id;
           print "push qword %d" (List.length sexprs);
+          print "after_push_args%d:" id;
+
           (proc_code);
+          print "after_generate_proc%d:" id;
           "mov bl,byte [rax]";
           "cmp bl ,T_CLOSURE";
           "jne rax_isnt_closure";
 
-          "CLOSURE_ENV rsi, rax";
-          "push rsi                 ; push env";
+          "CLOSURE_ENV r14, rax";
+          "push r14                 ; push env";
+          print "after_push_env%d:" id;
           (finish_applic_case);
         ]
 
          
   let make_consts_tbl asts =
     let consts_tbl_init = 
-      [ (Void, (next_const_offset 1, "MAKE_VOID")); 
-        (Sexpr (Nil), (next_const_offset 1, "MAKE_NIL")); 
+      [  
         (Sexpr(Bool false), (next_const_offset 2, "MAKE_BOOL(0)")); 
         (Sexpr(Bool true), (next_const_offset 2,"MAKE_BOOL(1)")); 
+        (Sexpr Nil, (next_const_offset 1, "MAKE_NIL"));
+        (Void, (next_const_offset 1, "MAKE_VOID")); 
       ] in
     
     let adrs_sort = List.sort (fun (a1,(b1,c1)) (a2,(b2,c2)) -> if b1 > b2 then 1 else 0) in
