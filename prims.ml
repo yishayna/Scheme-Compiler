@@ -314,7 +314,6 @@ module Prims : PRIMS = struct
     "apply_as:
       push rbp
       mov rbp, rsp
-      push SOB_NIL_ADDRESS            ; save space for magic cell 
       " in
 
     let improper_list_address =
@@ -327,6 +326,12 @@ module Prims : PRIMS = struct
     
     (*--- rbx will contain the address of the improper list ---*)
     
+    let push_magic_cell = 
+     "
+      push SOB_NIL_ADDRESS           ; push reserved space for magic cell        
+      mov r11, 1                     ; r11 will save the size of current stack, add 1 for magic 
+     " in
+
     let is_empty_improper_list = 
      "
       mov rax, SOB_NIL_ADDRESS       ; rax will contain the reverted list / empty list if empty
@@ -399,10 +404,8 @@ module Prims : PRIMS = struct
       ; push the number of all args ( optional and list elements)
       .args_ready_on_stack:
       mov rdi, NUM_OF_ARGS            ; get num of args = proc, n of proc, s
-      .before_all_args:
       sub rdi, 2                      ; get only the num of optional args
       add rdi, rcx                    ; add to the length of improper list the optional args number
-      .push_all_args:
       push rdi                        ; push all args number 
       mov rcx ,rdi                    ; rcx holds all args
       .push_all_args_end:
@@ -412,10 +415,8 @@ module Prims : PRIMS = struct
      "
       ; push env and ret address
       mov r12, PVAR(0)               ; mov rdi the proc
-      .get_closure_env1:
       CLOSURE_ENV rsi, r12           ; get env of proc
       push rsi                       ; push env 
-      .get_closure_env2:
       push qword[rbp + 8]            ; push ret address
       " in 
 
@@ -423,22 +424,19 @@ module Prims : PRIMS = struct
      "
       ; shift the frame for apply in tail position
       push qword[rbp]                  
-      .start_apply_proc:
       mov rdx, NUM_OF_ARGS          ; number of old args
       add rdx, 5                    ; old_stackframe_size
       mov rax,rdx                   ; save in rdx oldstack size for rsp addition  
-      add rcx, 4                    ; rcx has the number of all args +4 for current stack size
-      mov rbx, rcx                  ; curr_stackframe_size 
-      .before_loop:
+      add r11, rcx                  ; add the length of the list args
+      add r11, 4                    ; add the common args = ret add, env, code, num of args
+      mov rbx, r11                  ; curr_stackframe_size 
       mov rcx, 1                    ; initialize copy counter
       .copy_loop:
       cmp rbx , 0
       je .finish_loop
       dec rax
-      .in_loop:
       mov r9,rcx
       neg r9
-      .before_move:
       mov r8, qword[rbp + WORD_SIZE*r9] ; copy curr stack value 
       mov [rbp + WORD_SIZE*rax], r8    ; mov curr stack value over old space
       inc rcx
@@ -446,15 +444,13 @@ module Prims : PRIMS = struct
       jmp .copy_loop
       .finish_loop:
       shl rdx, 3                       ; old stacksize * qword size
-      .test1:
       add rsp, rdx                     ; move rsp to point to new moved stack
-      .test2:
       CLOSURE_CODE rsi, r12            ; get the code of the closure
-      .before_jmp:
       pop rbp
       jmp rsi
     " in
-    let apply_flow_list = [apply_start ;improper_list_address; is_empty_improper_list;
+
+    let apply_flow_list = [apply_start ;improper_list_address; push_magic_cell; is_empty_improper_list;
               revert_improper_list; push_improper_list; is_optional_args;
               push_optional_args; push_all_args_number; push_prepartions_apply; apply_closure] in
   
