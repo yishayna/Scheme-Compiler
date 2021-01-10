@@ -171,8 +171,8 @@ module Code_Gen : CODE_GEN = struct
     | Box'(v)-> 
       print_lst  
           ["; generate Box'(v)";
-            "MALLOC rbx, WORD_SIZE";
             (generate_rec_call (Var'(v)));
+            "MALLOC rbx, WORD_SIZE";
             "mov [rbx], rax";
             "mov rax, rbx";]
     | LambdaSimple'(args, body) -> lambda_writer consts fvars env_num args body []
