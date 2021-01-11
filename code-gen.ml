@@ -251,12 +251,8 @@ module Code_Gen : CODE_GEN = struct
             (num_of_opt_args);
             print "adjust_loop%d: \n cmp rcx, 0" id;
             print "je shrink_stack_end%d" id;
-            print "in_adjust_loop1%d:" id;
             "sub r12, WORD_SIZE                 ; decrease r12 to point on the previos element for the next loop";
-            "mov r13, [r12]";
-            print "in_adjust_loop2%d:" id;
             "mov r8, [r12]";
-            print "in_adjust_loop3%d:" id;
             "MAKE_PAIR(rax,r8,r9)               ; rax = pointer to the new pair, r8 = car, r9 = cdr";
             "mov r9, rax                        ; to make the list we need to add this list to be the cdr in the next loop";
             print "dec rcx \n jmp adjust_loop%d" id;
