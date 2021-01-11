@@ -233,7 +233,7 @@ module Code_Gen : CODE_GEN = struct
 
   and adjust_stack num_of_args id =
     let num_args_stack_in_bites_to_r10 = "mov r10, NUM_OF_ARGS \n shl r10, 3" in 
-    let num_of_opt_args =  (print "mov rcx, NUM_OF_ARGS \nsub rcx, %s" num_of_args) in
+    let num_of_opt_args_to_ecx =  (print "mov rcx, NUM_OF_ARGS \nsub rcx, %s" num_of_args) in
     
     let last_opt_arg_pointer_in_r12 = 
       print_lst 
@@ -248,7 +248,7 @@ module Code_Gen : CODE_GEN = struct
           "; invariant: after calling rax holding the new args pairs list";
           (last_opt_arg_pointer_in_r12);
             "mov r9, SOB_NIL_ADDRESS           ; we want to build an proper list, so the last val is NIL"; 
-            (num_of_opt_args);
+            (num_of_opt_args_to_ecx);
             print "adjust_loop%d: \n cmp rcx, 0" id;
             print "je shrink_stack_end%d" id;
             "sub r12, WORD_SIZE                 ; decrease r12 to point on the previos element for the next loop";
