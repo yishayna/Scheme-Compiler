@@ -19,19 +19,12 @@
       (map-many f args)))))
 
 
-
 (define fold-left
 	(lambda (f init lst)        
 		(letrec ((fold (lambda (lst acc)           
 			(if (null? lst) acc
 				(fold  (cdr lst) (f acc (car lst))))))) 
 			(fold lst init))))
-
-
-; (define fold-left 
-;   #;(Add your implementation here
-;      Note: The file won't compile like this, beacuase your tag-parser requires define to have a second expression.
-;      This is on purpose, so you don't compile the library without completing this implementation by mistake.))
 
 (define fold-right 
 	(lambda (f init lst)        
@@ -40,20 +33,10 @@
 							(f (car lst) (fold acc (cdr lst)) ))))) 
 			(fold init lst))))
 
-
-; (define fold-right
-;   #;(Add your implementation here
-;      Note: The file won't compile like this, beacuase your tag-parser requires define to have a second expression.
-;      This is on purpose, so you don't compile the library without completing this implementation by mistake.))
-
 (define cons*
 	(let ((cons cons)(null? null?))
 		(lambda (x . y)
 			(fold-right (lambda (acc v) (if (null? v) acc (cons acc v))) '()  (cons x y)))))
-
-;   #;(Add your implementation here
-;      Note: The file won't compile like this, beacuase your tag-parser requires define to have a second expression.
-;      This is on purpose, so you don't compile the library without completing this implementation by mistake.))
 
 (define append
   (let ((null? null?)
@@ -77,7 +60,7 @@
 	      (lambda (x)
 		(or (null? x)
 		    (and (pair? x)
-			 (list? (cdr x)))))))
+			 (list?-loop (cdr x)))))))
       list?-loop)))
 
 (define make-string
@@ -103,24 +86,22 @@
 	      ((and (flonum? x) (rational? y)) (op x (exact->inexact y)))
 	      ((and (rational? x) (flonum? y)) (op (exact->inexact x) y))
 	      (else (op x y)))))))
-    (let ((normalize
-	   (lambda (x)
-	     (if (flonum? x)
-		 x
-		 (let ((n (gcd (numerator x) (denominator x))))
-		   (_/ (_/ (numerator x) n) (_/ (denominator x) n)))))))
-      (set! + (lambda x (normalize (fold-left (^numeric-op-dispatcher _+) 0 x))))
-      (set! * (lambda x (normalize (fold-left (^numeric-op-dispatcher _*) 1 x))))
+      (set! + (lambda x (fold-left (^numeric-op-dispatcher _+) 0 x)))
+      (set! * (lambda x (fold-left (^numeric-op-dispatcher _*) 1 x)))
       (set! / (let ((/ (^numeric-op-dispatcher _/)))
 		(lambda (x . y)
 		  (if (null? y)
 		      (/ 1 x)
-		      (normalize (fold-left / x y)))))))
+		      (fold-left / x y)))))
     (let ((^comparator
-	  (lambda (op)
-	    (lambda (x . ys)
-	      (fold-left (lambda (a b) (and a b)) #t
-			 (map (lambda (y) (op x y)) ys))))))
+	   (lambda (op)
+	     (letrec ((comparator
+		       (lambda (x ys)
+			 (or (null? ys)
+			     (and (op x (car ys))
+				  (comparator (car ys) (cdr ys)))))))
+	       (lambda (x . y)
+		 (comparator x y))))))
       (set! = (^comparator (^numeric-op-dispatcher _=)))
       (set! < (^comparator (^numeric-op-dispatcher _<))))))
 
@@ -135,11 +116,15 @@
 
 (define >
   (let ((null? null?) (not not)
-	(< <) (= =) (fold-left fold-left))
-    (lambda (x . ys)
-      (fold-left (lambda (a y)
-		   (and a (not (or (< x y) (= x y)))))
-		 #t ys))))
+        (car car) (cdr cdr)
+        (< <) (= =))
+    (letrec ((>-loop
+	      (lambda (x ys)
+	        (or (null? ys)
+		    (and (not (< x (car ys))) (not (= x (car ys)))
+		         (>-loop (car ys) (cdr ys)))))))
+      (lambda (x . y)
+        (>-loop x y)))))
 
 (define gcd
   (let ((gcd gcd) (null? null?)
@@ -204,7 +189,7 @@
 		 ((and (flonum? x) (flonum? y)) (= x y))
 		 ((and (char? x) (char? y)) (= (char->integer x) (char->integer y)))
 		 ((and (pair? x) (pair? y))
-		  (equal?-loop (car x) (car y)) (equal?-loop (cdr x) (cdr y)))
+		  (and (equal?-loop (car x) (car y)) (equal?-loop (cdr x) (cdr y))))
 		 ((and (string? x) (string? y)) (equal?-loop (string->list x) (string->list y)))
 		 (else (eq? x y))))))
     equal?-loop)))
