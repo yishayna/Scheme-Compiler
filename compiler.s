@@ -151,12 +151,13 @@
 %define MAKE_VOID db T_VOID
 
 
-%macro MAKE_LITERAL_STRING 1
+%macro MAKE_LITERAL_STRING 0-*
 db T_STRING
-dq (%%end_str - %%str)
-%%str:
+dq %0
+%rep %0
 db %1
-%%end_str:
+%rotate 1
+%endrep
 %endmacro
 
 ;;; Macros and routines for printing Scheme OBjects to STDOUT

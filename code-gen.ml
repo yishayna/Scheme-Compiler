@@ -66,14 +66,17 @@ module Code_Gen : CODE_GEN = struct
   let  idx_as_int expr tbl = (fst (List.assoc expr tbl));;
   let  idx_as_str expr tbl =  try (string_of_int (idx_as_int expr tbl)) with Not_found -> "ERROR idx_as_str"  ;;
   let  idx_as_str_fvars expr tbl =  try (string_of_int (List.assoc expr tbl)) with Not_found -> ("ERROR_idx_as_str "^expr)  ;;
+  let  str_to_ascii s = String.concat "," (List.map (fun (c)-> string_of_int (Char.code c)) (string_to_list s)) ;;
 
+  let print  = Printf.sprintf;;
+  let print_lst lst =  String.concat "\n" lst ;; 
 
   let rec add_to_const_tbl expr tbl =
       match expr with
       | Char(c) ->  append_to_set (Sexpr(expr), ( 2, "MAKE_LITERAL_CHAR("^(string_of_int (Char.code c))^")"))  tbl
       | Number(Float f) -> append_to_set (Sexpr(expr),( 9, "MAKE_LITERAL_FLOAT("^(string_of_float f)^")"))  tbl
       | Number(Fraction (n, d)) -> append_to_set (Sexpr(expr),( 17, "MAKE_LITERAL_RATIONAL("^string_of_int n^","^string_of_int d^")"))  tbl
-      | String(s) ->  append_to_set (Sexpr(expr),( ((String.length s) + 9), "MAKE_LITERAL_STRING \""^(String.escaped s)^"\""))  tbl
+      | String(s) ->  append_to_set (Sexpr(expr),( ((String.length s) + 9),  print "MAKE_LITERAL_STRING %s ; the original string is: %s" (str_to_ascii s) s))  tbl
       | Symbol(s) ->  (let n_tbl = add_to_const_tbl (String(s)) tbl in
                       append_to_set (Sexpr(expr),( 9,"MAKE_LITERAL_SYMBOL(const_tbl+"^(idx_as_str (Sexpr(String(s))) n_tbl)^")"))  n_tbl)
       | Pair(car, cdr) ->  (let n_tbl = (add_to_const_tbl car (add_to_const_tbl cdr tbl)) in 
@@ -92,8 +95,6 @@ module Code_Gen : CODE_GEN = struct
     | Var'(VarFree v) when (List.mem_assoc v tbl = false) -> tbl@[(v, fvar_next_offset())]
     | _ -> tbl
  
-  let print  = Printf.sprintf;;
-  let print_lst lst =  String.concat "\n" lst ;; 
 
 
   let rec generate_rec consts fvars e env_num =
