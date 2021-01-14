@@ -319,13 +319,12 @@ and quasiquote_macro_expand sexp =
   match sexp with
   | Pair(Symbol("unquote"),Pair(sexp,Nil)) -> sexp
   | Pair(Symbol("unquote-splicing"),Pair(sexp,Nil)) -> raise X_syntax_error
-  | Nil -> Pair(Symbol("quote"),Pair(sexp,Nil)) 
-  | Symbol(exp) -> Pair(Symbol("quote"),Pair(sexp,Nil)) 
   | Pair(car,cdr) -> (match (car,cdr) with
     | (Pair(Symbol("unquote-splicing"),Pair(car,_)),cdr) -> Pair(Symbol("append"),Pair(car,Pair(quasiquote_macro_expand cdr,Nil)))
     | (car,Pair(Symbol("unquote-splicing"),Pair(cdr,_))) -> Pair(Symbol("cons"),Pair(quasiquote_macro_expand car,Pair(cdr,Nil)))
     | _ -> Pair(Symbol("cons"),Pair(quasiquote_macro_expand car,Pair(quasiquote_macro_expand cdr,Nil))))
-  | _ -> raise X_syntax_error
+  | _ -> Pair(Symbol("quote"),Pair(sexp,Nil)) 
+
 
 
 
