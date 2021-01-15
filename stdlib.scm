@@ -36,7 +36,11 @@
 (define cons*
 	(let ((cons cons)(null? null?))
 		(lambda (x . y)
-			(fold-right (lambda (acc v) (if (null? v) acc (cons acc v))) '()  (cons x y)))))
+			(letrec ((cons** (lambda (lst) 
+							(if (null? (cdr lst)) 
+								(car lst) 
+								(cons (car lst) (cons** (cdr lst)))))))
+				(cons** (cons x y))))))
 
 (define append
   (let ((null? null?)
